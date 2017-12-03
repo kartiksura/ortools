@@ -1,12 +1,11 @@
 from __future__ import print_function
-import sys
 from ortools.constraint_solver import pywrapcp
 
 def main():
     # Creates the solver.
     solver = pywrapcp.Solver("schedule_shifts")
 
-    turnos = {'M', 'T', 'N'}
+    turnos = ('-', 'M', 'T', 'N')
     num_nurses = 4
     num_shifts = 4     # Nurse assigned to shift 0 means not working that day.
     num_days = 7
@@ -29,10 +28,9 @@ def main():
     # Set relationships between shifts and nurses.
     for day in range(num_days):
         nurses_for_day = [nurses[(j, day)] for j in range(num_shifts)]
-
-    for j in range(num_nurses):
-        s = shifts[(j, day)]
-        solver.Add(s.IndexOf(nurses_for_day) == j)
+        for j in range(num_nurses):
+            s = shifts[(j, day)]
+            solver.Add(s.IndexOf(nurses_for_day) == j)
 
     # Make assignments different on each day
     for i in range(num_days):
@@ -103,7 +101,7 @@ def main():
         for j in range(num_nurses):
             shift_str = "Nurse %s      " %j
             for i in range(num_days):
-                shift_str = shift_str +  str( shifts[(j, i)].Value()) + "     "
+                shift_str = shift_str +  str( turnos[shifts[(j, i)].Value()]) + "     "
             print( shift_str)
         r = input ("Desea que busque otra soluvcion? (Y/n)")
         if r.capitalize()=='N':

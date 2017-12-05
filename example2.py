@@ -94,11 +94,21 @@ def main():
     # Create the decision builder.
     db = solver.Phase(shifts_flat, solver.CHOOSE_FIRST_UNBOUND,
                     solver.ASSIGN_MIN_VALUE)
-
-    solver.NewSearch(db, objective )
-
+    # Create a solution collector.
+    collector = solver.FirstSolutionCollector(db)
+    # Add the decision variables.
+    solution = solver.Assignment()
+    solution.Add(shifts_flat)
+    # Add the objective.
+    collector.AddObjective(objective)
+    solver.Solve(db, [objective, collector] )
+    print("Solutions found:", collector.SolutionCount())
+    print("Time:", solver.WallTime(), "ms")
+    print()
     # Looking up solutions
     soln = 0
+
+    """
     while solver.NextSolution():
         # show solutions on console
         soln = soln + 1
@@ -120,6 +130,6 @@ def main():
     if not(solver.NextSolution()):
         print("No se han encontrado soluciones!")
     solver.EndSearch()
-
+    """
 if __name__ == "__main__":
     main()

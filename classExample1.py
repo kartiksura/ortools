@@ -15,20 +15,17 @@ class SchedulingSolver:
     num_shifts = 4  # Nurse assigned to shift 0 means not working that day.
     num_days = 7
 
+    # Ortools solver Vars
+    shifts = {}
+    nurses = {}
+    shifts_flat =[]
+    works_shift = {}
+    cost = solver.IntVar(0, 1000, "cost")
+
     # extra variables, visualize, easy use, etc..
     turnos = ('-', 'M', 'T', 'N')
 
-    def __init__(self):
-
-        # Ortools solver Vars
-
-        self.db = None
-        self.objective = None
-        self.shifts = {}
-        self.nurses = {}
-        self.shifts_flat = []
-        self.works_shift = {}
-        self.cost = self.solver.IntVar(0, 1000, "cost")
+#    def __init__(self):
 
 
     def definedModel(self):
@@ -108,9 +105,10 @@ class SchedulingSolver:
     def createDecisionBuilderPhase(self):
 
         # Create the decision builder.
-        self.db = self.solver.Phase(self.shifts_flat, self.solver.ASSIGN_MIN_VALUE, self.solver.CHOOSE_FIRST_UNBOUND)
+        self.db = self.solver.Phase(self.shifts_flat, self.solver.CHOOSE_FIRST_UNBOUND,
+                          self.solver.ASSIGN_MIN_VALUE)
 
-    def displaySolutions(self):
+     def displaySolutions(self):
         """
         Display to the console solutions for the problem, using a next solution strategy.
 
@@ -155,7 +153,6 @@ def main():
     mysched.createDecisionBuilderPhase()
     mysched.displaySolutions()
 
-    exit(0)
 
 """
     # Create the decision builder.

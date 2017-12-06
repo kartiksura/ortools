@@ -29,7 +29,8 @@ class SchedulingSolver:
         self.shifts_flat = []
         self.works_shift = {}
         self.cost = self.solver.IntVar(0, 1000, "cost")
-
+        self.cost2 = self.solver.IntVar(0, 1000, "cost2")
+        self.totalcost = self.solver.IntVar(0, 1000, "totalcost")
 
     def definedModel(self):
         """
@@ -102,9 +103,13 @@ class SchedulingSolver:
         #   shifts[(1, 0)] != 0  (nurse 1 on day 0) !=0 (working, 0 mean working)
         #solver.Add(solver.IsDifferentCstVar(shifts[(1, 0)],0))
 
+        #IsDifferentCstCar(intExp*, int) = intVar*
         self.solver.Add(self.cost== 30* self.solver.IsDifferentCstVar(self.shifts[(3, 6)],0))
 
-    def AddSoftConstraint( self, constraint, cost):
+        self.AddSoftConstraint()
+        self.solver.Add(self.totalcost == self.cost + self.cost2)
+
+    def AddSoftConstraint( self):
         """
         Adds a contraint to the solver, but in soft mode with a penalization value of cost
 
@@ -112,8 +117,15 @@ class SchedulingSolver:
         :param cost: Penalization value if constraint is found
         :return: void
         """
-
-
+        #ConditionalExpression(intVar*, intExp*, int) = intExp*
+        #self.solver.Add(self.cost2 == self.solver.ConditionalExpression(self.shifts[(0,0)]==0, self.cost2, 50))
+        c = self.solver.IntVar(0, 10,"c")
+        i = 1
+        v = self.solver.intVar(0, 10, "v")
+        if self.solver.ConditionalExpression(c == 0, v, 50):
+            print ("Hola")
+        else:
+            print ("No")
 
     def createDecisionBuilderPhase(self):
 
@@ -128,17 +140,15 @@ class SchedulingSolver:
         :return: dsol: solution number to display
         """
 
-        # Add the decision variables.
-
-
         # Create a solution collector.
 
         collector = self.solver.LastSolutionCollector()
         collector.Add(self.shifts_flat)
 
         # Add the objective and solve
+
         self.objective = self.solver.Maximize(self.cost, 1)
-        collector.AddObjective(self.cost)
+        collector.AddObjective(self.totalcost)
 
         #solution_limit = self.solver.SolutionsLimit(1000)
 
@@ -207,15 +217,19 @@ class SchedulingSolver:
 def main():
 
     mysched = SchedulingSolver()
+    mysched.AddSoftConstraint()
 
+    exit(0)
+
+""""
     mysched.definedModel()
     mysched.hardConstraints()
     mysched.softContraints()
     mysched.createDecisionBuilderPhase()
     #mysched.searchSolutions()
     mysched.searchSolutionsCollector(0)
+"""
 
-    exit(0)
 
 if __name__ == "__main__":
     main()

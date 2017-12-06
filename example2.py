@@ -102,17 +102,48 @@ class SchedulingSolver:
         #   shifts[(1, 0)] != 0  (nurse 1 on day 0) !=0 (working, 0 mean working)
         #solver.Add(solver.IsDifferentCstVar(shifts[(1, 0)],0))
 
-        self.objective = self.solver.Add(self.cost== 30* self.solver.IsDifferentCstVar(self.shifts[(3, 6)],0))
-        self.solver.Minimize(self.cost, 1)
+        self.solver.Add(self.cost== 30* self.solver.IsDifferentCstVar(self.shifts[(3, 6)],0))
+        self.objective = self.solver.Minimize(self.cost, 1)
 
     def createDecisionBuilderPhase(self):
 
         # Create the decision builder.
         self.db = self.solver.Phase(self.shifts_flat, self.solver.ASSIGN_MIN_VALUE, self.solver.CHOOSE_FIRST_UNBOUND)
 
-    def displaySolutions(self):
+
+    def searchSolutionsCollector(self, dsol):
         """
-        Display to the console solutions for the problem, using a next solution strategy.
+        Search solutions using collector
+
+        :return: dsol: solution number to display
+        """
+
+        # Add the decision variables.
+
+        solution = self.solver.Assignment()
+        solution.Add(self.shifts_flat)
+        solution.Add(self.cost)
+
+        # Create a solution collector.
+
+        collector = self.solver.AllSolutionCollector(solution)
+
+        # Add the objective and solve
+
+        collector.AddObjective(self.cost)
+        solution_limit = self.solver.SolutionsLimit(1)
+
+        self.solver.Solve(self.db, [solution_limit, collector] )
+
+        print("Solutions found:", collector.SolutionCount())
+        print("Time:", self.solver.WallTime(), "ms")
+        print()
+        #send_shifts = collector.Value(dsol, self.shifts )
+        self.showSolutionToScreen(dsol, collector.Value(dsol, self.cost), self.shifts, collector)
+
+    def searchSolutions(self):
+        """
+        Search a solution using a next solution strategy.
 
         :return:
         """
@@ -125,24 +156,42 @@ class SchedulingSolver:
         while self.solver.NextSolution():
             # show solutions on console
             soln = soln + 1
-            day_str =""
-            print("Solution number ", str(soln), "Cost=", str(self.cost.Value()), '\n')
-            for i in range(self.num_days):
-                day_str = day_str + "Day" + str(i) + "  "
-            print( "          " ,day_str)
-
-            for j in range(self.num_nurses):
-                shift_str = "Nurse %s      " %j
-                for i in range(self.num_days):
-                    shift_str = shift_str +  str(self.turnos[self.shifts[(j, i)].Value()]) + "     "
-                print( shift_str)
-            r = input ("Desea que busque otra soluvcion? (Y/n)")
-            if r.capitalize()=='N':
+            r= self.showSolutionToScreen(soln, self.cost.Value(), self.shifts)
+            if (r == 0):
                 break
-
         if not(self.solver.NextSolution()):
             print("No se han encontrado soluciones!")
         self.solver.EndSearch()
+
+    def showSolutionToScreen(self, dsoln, dcost, dshifts, collector=None):
+        """
+        Show a solution scheduler to the screen
+
+        :param
+            dsoln: number of the solution to display
+            dcost: cost of the solution found
+        :return: exit code  0: stop search manually
+                            1: no solutions found
+        """
+        day_str = ""
+        print("Solution number ", str(dsoln), "Cost=", str(dcost), '\n')
+        for i in range(self.num_days):
+            day_str = day_str + "Day" + str(i) + "  "
+        print("          ", day_str)
+
+        for j in range(self.num_nurses):
+            shift_str = "Nurse %s      " % j
+            for i in range(self.num_days):
+                if collector is None:
+                    shift_str = shift_str + str(self.turnos[dshifts[(j, i)].Value()]) + "     "
+                else:
+                    shift_str = shift_str + str(self.turnos[collector.Value(dsoln, dshifts[(j, i)])]) + "     "
+
+            print(shift_str)
+        if collector is None:
+            r = input("Desea que busque otra solucion? (Y/n)")
+            if r.capitalize() == 'N':
+                return(0)
 
 
 def main():
@@ -153,25 +202,10 @@ def main():
     mysched.hardConstraints()
     mysched.softContraints()
     mysched.createDecisionBuilderPhase()
-    mysched.displaySolutions()
+    #mysched.searchSolutions()
+    mysched.searchSolutionsCollector(0)
 
     exit(0)
 
-"""
-    # Create the decision builder.
-    db = solver.Phase(shifts_flat, solver.CHOOSE_FIRST_UNBOUND,
-                    solver.ASSIGN_MIN_VALUE)
-    # Create a solution collector.
-    collector = solver.FirstSolutionCollector(db)
-    # Add the decision variables.
-    solution = solver.Assignment()
-    solution.Add(shifts_flat)
-    # Add the objective.
-    collector.AddObjective(objective)
-    solver.Solve(db, [objective, collector] )
-    print("Solutions found:", collector.SolutionCount())
-    print("Time:", solver.WallTime(), "ms")
-    print()
-    """
 if __name__ == "__main__":
     main()

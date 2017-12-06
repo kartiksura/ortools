@@ -4,7 +4,7 @@ from ortools.constraint_solver import pywrapcp
 class SchedulingSolver:
     """
     Class for Scheduling problems
-    v 0.2 by Marc Farras
+    v 0.3 by Marc Farras
     """
 
     # Creates the solver.
@@ -103,7 +103,17 @@ class SchedulingSolver:
         #solver.Add(solver.IsDifferentCstVar(shifts[(1, 0)],0))
 
         self.solver.Add(self.cost== 30* self.solver.IsDifferentCstVar(self.shifts[(3, 6)],0))
-        self.objective = self.solver.Maximize(self.cost, 1)
+
+    def AddSoftConstraint( self, constraint, cost):
+        """
+        Adds a contraint to the solver, but in soft mode with a penalization value of cost
+
+        :param constraint: Contraint to insert
+        :param cost: Penalization value if constraint is found
+        :return: void
+        """
+
+
 
     def createDecisionBuilderPhase(self):
 
@@ -118,14 +128,18 @@ class SchedulingSolver:
         :return: dsol: solution number to display
         """
 
+        # Add the decision variables.
+
+
         # Create a solution collector.
 
         collector = self.solver.LastSolutionCollector()
         collector.Add(self.shifts_flat)
 
         # Add the objective and solve
-
+        self.objective = self.solver.Maximize(self.cost, 1)
         collector.AddObjective(self.cost)
+
         #solution_limit = self.solver.SolutionsLimit(1000)
 
         self.solver.Solve(self.db, [self.objective, collector] )

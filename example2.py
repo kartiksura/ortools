@@ -103,7 +103,7 @@ class SchedulingSolver:
         #solver.Add(solver.IsDifferentCstVar(shifts[(1, 0)],0))
 
         self.solver.Add(self.cost== 30* self.solver.IsDifferentCstVar(self.shifts[(3, 6)],0))
-        self.objective = self.solver.Minimize(self.cost, 1)
+        self.objective = self.solver.Maximize(self.cost, 1)
 
     def createDecisionBuilderPhase(self):
 
@@ -120,26 +120,27 @@ class SchedulingSolver:
 
         # Add the decision variables.
 
-        solution = self.solver.Assignment()
-        solution.Add(self.shifts_flat)
-        solution.Add(self.cost)
+        #solution = self.solver.Assignment()
+
 
         # Create a solution collector.
 
-        collector = self.solver.AllSolutionCollector(solution)
-
+        collector = self.solver.LastSolutionCollector()
+        collector.Add(self.shifts_flat)
+        #collector.Add(self.cost)
         # Add the objective and solve
 
         collector.AddObjective(self.cost)
-        solution_limit = self.solver.SolutionsLimit(1)
+        #solution_limit = self.solver.SolutionsLimit(1000)
 
-        self.solver.Solve(self.db, [solution_limit, collector] )
+        self.solver.Solve(self.db, [self.objective, collector] )
 
         print("Solutions found:", collector.SolutionCount())
         print("Time:", self.solver.WallTime(), "ms")
         print()
-        #send_shifts = collector.Value(dsol, self.shifts )
-        self.showSolutionToScreen(dsol, collector.Value(dsol, self.cost), self.shifts, collector)
+        best_solution = collector.SolutionCount() - 1
+
+        self.showSolutionToScreen(dsol, collector.ObjectiveValue(best_solution), self.shifts, collector)
 
     def searchSolutions(self):
         """

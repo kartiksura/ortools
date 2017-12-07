@@ -145,6 +145,8 @@ class SchedulingSolver:
 
         collector = self.solver.LastSolutionCollector()
         collector.Add(self.shifts_flat)
+        for c in range(self.nconstraints):
+            collector.Add(self.brkconstraints[c])
 
         # Add the objective and solve
 
@@ -160,7 +162,7 @@ class SchedulingSolver:
         print()
         best_solution = collector.SolutionCount() - 1
 
-        self.showSolutionToScreen(dsol, collector.ObjectiveValue(best_solution), self.shifts, collector)
+        self.showSolutionToScreen(dsol, collector.ObjectiveValue(best_solution), collector)
 
     def searchSolutions(self):
         """
@@ -184,7 +186,7 @@ class SchedulingSolver:
             print("No se han encontrado soluciones!")
         self.solver.EndSearch()
 
-    def showSolutionToScreen(self, dsoln, dcost, dshifts, collector=None):
+    def showSolutionToScreen(self, dsoln, dcost,collector=None):
         """
         Show a solution scheduler to the screen
 
@@ -204,14 +206,26 @@ class SchedulingSolver:
             shift_str = "Nurse %s      " % j
             for i in range(self.num_days):
                 if collector is None:
-                    shift_str = shift_str + str(self.turnos[dshifts[(j, i)].Value()]) + "     "
+                    shift_str = shift_str + str(self.turnos[self.shifts[(j, i)].Value()]) + "     "
                 else:
-                    shift_str = shift_str + str(self.turnos[collector.Value(dsoln, dshifts[(j, i)])]) + "     "
+                    shift_str = shift_str + str(self.turnos[collector.Value(dsoln, self.shifts[(j, i)])]) + "     "
 
             print(shift_str)
-        print ("Breaked constraints: ")
 
-        #print ("Cons0=", str(self.brkconstraints[0].Value()))
+        # show braked constraints (soft)
+        print("------------------------------------------------")
+        cons_count = 0
+        for n in range (self.nconstraints):
+            if collector is None:
+                cons=self.brkconstraints[n].Value()
+
+            else:
+                cons=collector.Value(dsoln, self.brkconstraints[n])
+            if cons == 1:
+                cons_count = cons_count +1
+            print ("Constraint %i breaked with cost %i" % (cons, self.brkconstraintscost[n]) )
+
+        print("Breaked soft constraints: %i \n" %cons_count)
 
         if collector is None:
             r = input("Desea que busque otra solucion? (Y/n)")

@@ -120,8 +120,7 @@ class SchedulingSolver:
         #ConditionalExpression(intVar*, intExp*, int) = intExp*
         #self.solver.Add(self.cost2 == self.solver.ConditionalExpression(self.shifts[(0,0)]==0, self.cost2, 50))
         c = self.solver.IntVar(0, 10,"c")
-        i = 1
-        v = self.solver.intVar(0, 10, "v")
+        v = self.solver.Add("c <= 10")
         if self.solver.ConditionalExpression(c == 0, v, 50):
             print ("Hola")
         else:

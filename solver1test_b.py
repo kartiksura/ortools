@@ -14,7 +14,7 @@ class SchedulingSolver:
     num_nurses = 4
     num_shifts = 4  # Nurse assigned to shift 0 means not working that day.
     num_days = 7
-    nconstraints = 1  #used only to display the number of Soft constraints to count
+    nconstraints = 0  #used to count the number of Soft constraints add to the system
 
     # extra variables, visualize, easy use, etc..
     turnos = ('-', 'M', 'T', 'N')
@@ -22,6 +22,7 @@ class SchedulingSolver:
     def __init__(self):
 
         # Ortools solver Vars
+        self.maxsoftconstraints= 10   # max number of soft constraints in the entire problem
 
         self.db = None
         self.objective = None
@@ -43,6 +44,8 @@ class SchedulingSolver:
         """
         # [START]
         # Create shift variables.
+
+        # shifts[(nurses, day)]
         self.shifts = {}
 
         for j in range(self.num_nurses):
@@ -51,6 +54,7 @@ class SchedulingSolver:
         self.shifts_flat = [self.shifts[(j, i)] for j in range(self.num_nurses) for i in range(self.num_days)]
 
         # Create nurse variables.
+        # nurses[(shift, day)]
         self.nurses = {}
 
         for j in range(self.num_shifts):
@@ -65,7 +69,7 @@ class SchedulingSolver:
                 self.solver.Add(s.IndexOf(nurses_for_day) == j)
 
         # Initialize list of broken constraints
-        for i in range(self.nconstraints):
+        for i in range(self.maxsoftconstraints):
             self.brkconstraints[i] = self.solver.IntVar(0,1,"brk %i" % i)
 
     def hardConstraints(self):
@@ -98,9 +102,10 @@ class SchedulingSolver:
                 self.solver.Add(self.works_shift[(i, j)] == self.solver.Max([self.shifts[(i, k)] == j
                     for k in range(self.num_days)]))
 
-    def softContraints(self):
+
+    def softConstraints(self):
         """
-        Define Soft Constraints for dthe problem, it points the cost penalization for
+        Define Soft Constraints for the problem, it points the cost penalization for
         the contraint incompliment, giving a total cost for the problem
 
         :return: void
@@ -110,24 +115,26 @@ class SchedulingSolver:
         #   shifts[(1, 0)] != 0  (nurse 1 on day 0) !=0 (working, 0 mean working)
         #solver.Add(solver.IsDifferentCstVar(shifts[(1, 0)],0))
 
+
+        self.addSoft_ShiftForNurseOnDay_NotEqualTo(3, 6, 0, 30)
+
+    def addSoft_ShiftForNurseOnDay_NotEqualTo(self, inurse, iday, ine_shift, penalty):
+        """
+            Add a soft constraint where a Shift for a Nurse on a single Day can't be equal to ne_shiff
+        :param inurse: The nurse index
+        :param iday: The day index number
+        :param ine_shift: The index shift
+        :param penalty: The penalty cost for this constraint (int)
+        :return:
+        """
         #IsDifferentCstCar(intExp*, int) = intVar*
         #self.solver.Add(self.cost== 30* self.solver.IsDifferentCstVar(self.shifts[(3, 6)],0))
-        self.solver.Add(self.brkconstraints[0] == 1 * self.solver.IsDifferentCstVar(self.shifts[(3, 6)],0))
 
-        self.solver.Add(self.cost == self.brkconstraintscost[0] * self.brkconstraints[0])
+        self.solver.Add(self.brkconstraints[self.nconstraints] == 1 * self.solver.IsDifferentCstVar(self.shifts[(inurse, iday)], ine_shift))
+        self.solver.Add(self.cost == penalty * self.brkconstraints[self.nconstraints])
+        self.nconstraints += 1
 
 
-    """
-    def AddSoftConstraint( self):
-        
-        Adds a contraint to the solver, but in soft mode with a penalization value of cost
-
-        :param constraint: Contraint to insert
-        :param cost: Penalization value if constraint is found
-        :return: void
-        
-
-    """
     def createDecisionBuilderPhase(self):
 
         # Create the decision builder.
@@ -239,7 +246,7 @@ def main():
 
     mysched.definedModel()
     mysched.hardConstraints()
-    mysched.softContraints()
+    mysched.softConstraints()
     mysched.createDecisionBuilderPhase()
     #mysched.searchSolutions()
     mysched.searchSolutionsCollector(0)

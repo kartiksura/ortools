@@ -62,7 +62,7 @@ def main():
     for j in range(1, num_shifts):
     solver.Add(solver.Sum([works_shift[(i, j)] for i in range(num_nurses)]) <= 2)
     
-    # If s nurses works shifts 2 or 3 on, he must also work that shift the previous
+    # If a nurses works shifts 2 or 3 on, he must also work that shift the previous
     # day or the following day.
     solver.Add(solver.Max(nurses[(2, 0)] == nurses[(2, 1)], nurses[(2, 1)] == nurses[(2, 2)]) == 1)
     solver.Add(solver.Max(nurses[(2, 1)] == nurses[(2, 2)], nurses[(2, 2)] == nurses[(2, 3)]) == 1)

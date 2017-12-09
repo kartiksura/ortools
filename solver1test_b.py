@@ -15,6 +15,7 @@ class SchedulingSolver:
     num_shifts = 4  # Nurse assigned to shift 0 means not working that day.
     num_days = 7
     nconstraints = 0  #used to count the number of Soft constraints add to the system
+    maxsoftconstraints = 10  # max number of soft constraints in the entire problem
 
     # extra variables, visualize, easy use, etc..
     turnos = ('-', 'M', 'T', 'N')
@@ -22,7 +23,6 @@ class SchedulingSolver:
     def __init__(self):
 
         # Ortools solver Vars
-        self.maxsoftconstraints= 10   # max number of soft constraints in the entire problem
 
         self.db = None
         self.objective = None
@@ -31,11 +31,12 @@ class SchedulingSolver:
         self.shifts_flat = []
         self.works_shift = {}
         self.cost = self.solver.IntVar(0, 1000, "cost")
-        # self.cost2 = self.solver.IntVar(0, 1000, "cost2")
-        # self.totalcost = self.solver.IntVar(0, 1000, "totalcost")
         self.brkconstraints = {}
-        self.brkcons_flat = []
-        self.brkconstraintscost = [30, 40, 50, 60]
+        self.brkconstraints_cost = []
+        self.p = None
+        self.n = None
+        for i in range(self.maxsoftconstraints):
+            self.brkconstraints_cost.append(0)
 
     def definedModel(self):
         """
@@ -71,6 +72,10 @@ class SchedulingSolver:
         # Initialize list of broken constraints
         for i in range(self.maxsoftconstraints):
             self.brkconstraints[i] = self.solver.IntVar(0,1,"brk %i" % i)
+
+        #local vars for the solver
+        self.p = self.solver.BoolVar("p")
+        self.n = self.solver.BoolVar("n")
 
     def hardConstraints(self):
         """
@@ -116,11 +121,12 @@ class SchedulingSolver:
         #solver.Add(solver.IsDifferentCstVar(shifts[(1, 0)],0))
 
 
-        self.addSoft_ShiftForNurseOnDay_NotEqualTo(3, 6, 0, 30)
+        #self.addSoft_ShiftForNurseOnDay_NotEqualTo(3, 6, 0, 30)
+        self.addSoft_AfterAShiftForNurseNextShift_NotEqualTo(3, 3, 1, 80)
 
     def addSoft_ShiftForNurseOnDay_NotEqualTo(self, inurse, iday, ine_shift, penalty):
         """
-            Add a soft constraint where a Shift for a Nurse on a single Day can't be equal to ne_shiff
+            Add a soft constraint where a Shift for a Nurse on a single Day can't be equal to ne_shift
         :param inurse: The nurse index
         :param iday: The day index number
         :param ine_shift: The index shift
@@ -130,10 +136,46 @@ class SchedulingSolver:
         #IsDifferentCstCar(intExp*, int) = intVar*
         #self.solver.Add(self.cost== 30* self.solver.IsDifferentCstVar(self.shifts[(3, 6)],0))
 
-        self.solver.Add(self.brkconstraints[self.nconstraints] == 1 * self.solver.IsDifferentCstVar(self.shifts[(inurse, iday)], ine_shift))
+        self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
+                        self.solver.IsDifferentCstVar(self.shifts[(inurse, iday)], ine_shift))
+
         self.solver.Add(self.cost == penalty * self.brkconstraints[self.nconstraints])
+        self.brkconstraints_cost[self.nconstraints] = penalty
         self.nconstraints += 1
 
+    def addSoft_AfterAShiftForNurseNextShift_NotEqualTo(self, ishift, inurse, ine_shift, penalty):
+        """
+
+        :param n: Number of shifts to count
+        :param ishift: The index shift to watch
+        :param inurse: The nurse index
+        :param ine_shift: The index Not Equal to shift
+        :param penalty: The penalty cost for this constraint (int)
+        :return:
+
+        for iday in range(self.num_days-1):
+            self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
+                self.solver.Max(self.solver.IsEqualCstVar(self.solver.shifts[inurse, iday], ishift),
+                self.solver.IsEqualCstVar(self.shifts[(inurse, iday + 1)], ine_shift)) == 2)
+        """
+        #self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
+        #                self.solver.IsDifferentCstVar(self.shifts[(inurse, 6)], ine_shift))
+        self.p = self.solver.IsEqualCstVar(self.shifts[(1, 0)], 2)
+        self.n = self.solver.IsEqualCstVar(self.shifts[(1, 1)], 1)
+        self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
+                        self.solver.IsEqualCstVar(self.p + self.n, 2))
+
+        #self.n = self.solver.IsEqualCstVar(self.solver.shifts[2, 1], 1)
+
+        #self.solver.Add(self.brkconstraints[self.nconstraints] == 1 * self.solver.IsEqualCstVar((self.p + self.n), 2))
+        #for iday in range(self.num_days-1):
+
+            #self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
+            #                self.solver.IsEqualCstVar(r, 2))
+
+        self.solver.Add(self.cost == penalty * self.brkconstraints[self.nconstraints])
+        self.brkconstraints_cost[self.nconstraints] = penalty
+        self.nconstraints += 1
 
     def createDecisionBuilderPhase(self):
 
@@ -230,7 +272,7 @@ class SchedulingSolver:
                 cons=collector.Value(dsoln, self.brkconstraints[n])
             if cons == 1:
                 cons_count = cons_count +1
-            print ("Constraint %i breaked with cost %i" % (cons, self.brkconstraintscost[n]) )
+            print ("Constraint %i breaked with cost %i" % (cons, self.brkconstraints_cost[n]) )
 
         print("Breaked soft constraints: %i \n" %cons_count)
 

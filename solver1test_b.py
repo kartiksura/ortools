@@ -153,14 +153,17 @@ class SchedulingSolver:
         :param penalty: The penalty cost for this constraint (int)
         :return:
 
-        for iday in range(self.num_days-1):
+        we can use also expressions like :
+
+        self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
+                        self.solver.IsEqualCstVar((self.shifts[(inurse, 0)] == ishift) +
+                                                  (self.shifts[(inurse, 1)] == ine_shift), 2))
         """
 
-        #self.p = self.solver.IsEqualCstVar(self.shifts[(inurse, 0)], ishift)
-        #self.n = self.solver.IsEqualCstVar(self.shifts[(inurse, 1)], ine_shift)
-        self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
-                        self.solver.IsEqualCstVar(self.solver.IsEqualCstVar(self.shifts[(inurse, 0)], ishift) +
-                                                  self.solver.IsEqualCstVar(self.shifts[(inurse, 1)], ine_shift), 2))
+        for iday in range(self.num_days - 1):
+            self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
+                        self.solver.IsEqualCstVar(self.solver.IsEqualCstVar(self.shifts[(inurse, iday)], ishift) +
+                                                  self.solver.IsEqualCstVar(self.shifts[(inurse, iday +1)], ine_shift), 2))
 
         self.solver.Add(self.cost == penalty * self.brkconstraints[self.nconstraints])
         self.brkconstraints_cost[self.nconstraints] = penalty

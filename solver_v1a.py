@@ -4,7 +4,7 @@ from ortools.constraint_solver import pywrapcp
 class SchedulingSolver:
     """
     Class for Scheduling problems
-    v 0.3 by Marc Farras
+    v 1.0 by Marc Farras
     """
 
     # Creates the solver.
@@ -14,8 +14,11 @@ class SchedulingSolver:
     num_nurses = 4
     num_shifts = 4  # Nurse assigned to shift 0 means not working that day.
     num_days = 7
+
+    # Global internal
     nconstraints = 0  #used to count the number of Soft constraints add to the system
-    maxsoftconstraints = 10  # max number of soft constraints in the entire problem
+    _maxsoftconstraints = 10  # max number of soft constraints implemented in the solver version class
+    _time_limit = 10000 # time limit for the solver in ms
 
     # extra variables, visualize, easy use, etc..
     turnos = ('-', 'M', 'T', 'N')
@@ -35,7 +38,7 @@ class SchedulingSolver:
         self.brkconstraints_cost = []
         self.p = None
         self.n = None
-        for i in range(self.maxsoftconstraints):
+        for i in range(self._maxsoftconstraints):
             self.brkconstraints_cost.append(0)
 
     def _ifexp1Andxp2(self, exp1, exp2):
@@ -97,7 +100,7 @@ class SchedulingSolver:
                                                                              for k in range(self.num_days)]))
 
         # Initialize list of broken constraints
-        for i in range(self.maxsoftconstraints):
+        for i in range(self._maxsoftconstraints):
             self.brkconstraints[i] = self.solver.IntVar(0,1,"brk %i" % i)
 
         #local vars for the solver
@@ -116,6 +119,9 @@ class SchedulingSolver:
             self.solver.Add(self.solver.AllDifferent([self.shifts[(j, i)] for j in range(self.num_nurses)]))
             self.solver.Add(self.solver.AllDifferent([self.nurses[(j, i)] for j in range(self.num_shifts)]))
 
+        # Each nurse works 5 or 6 days in a week.
+        self.addHardMaxWorkingDays(5, 6)
+
     def addHardMaxWorkingDays(self, minwdays, maxwdays):
         """
         Set the min and max working days for the problem on a hard constraint (only search for feasible solutions)
@@ -124,7 +130,7 @@ class SchedulingSolver:
         :param maxwdays:
         :return:
         """
-        # Each nurse works between min and max working days in a week.
+        # Each nurse works between min and max days in a week.
         #   tip: shift[(j,i)] = 0 is a not working shift
         for j in range(self.num_nurses):
             self.solver.Add(self.solver.Sum([self.shifts[(j, i)] > 0 for i in range(self.num_days)]) >= minwdays)
@@ -143,7 +149,7 @@ class SchedulingSolver:
         #solver.Add(solver.IsDifferentCstVar(shifts[(1, 0)],0))
 
 
-        #self.addSoft_ShiftForNurseOnDay_NotEqualTo(3, 6, 0, 30)
+        self.addSoft_ShiftForNurseOnDay_NotEqualTo(3, 6, 0, 30)
         self.addSoft_AfterAShiftForNurseNextShift_NotEqualTo(2, 1, 1, 80)
 
     def addSoft_ShiftForNurseOnDay_NotEqualTo(self, inurse, iday, ine_shift, penalty):
@@ -158,11 +164,13 @@ class SchedulingSolver:
         #IsDifferentCstCar(intExp*, int) = intVar*
         #self.solver.Add(self.cost== 30* self.solver.IsDifferentCstVar(self.shifts[(3, 6)],0))
 
-        self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
-                        self.solver.IsDifferentCstVar(self.shifts[(inurse, iday)], ine_shift))
+        thisSoftConstraint = 0  # internal index code constraint on the solver
 
-        self.solver.Add(self.cost == penalty * self.brkconstraints[self.nconstraints])
-        self.brkconstraints_cost[self.nconstraints] = penalty
+        self.solver.Add(self.brkconstraints[thisSoftConstraint] == 1 *
+                        self.solver.IsEqualCstVar(self.shifts[(inurse, iday)], ine_shift))
+
+        self.solver.Add(self.cost == penalty * self.brkconstraints[thisSoftConstraint])
+        self.brkconstraints_cost[thisSoftConstraint] = penalty
         self.nconstraints += 1
 
     def addSoft_AfterAShiftForNurseNextShift_NotEqualTo(self, ishift, inurse, ine_shift, penalty):
@@ -181,14 +189,15 @@ class SchedulingSolver:
                         self.solver.IsEqualCstVar((self.shifts[(inurse, 0)] == ishift) +
                                                   (self.shifts[(inurse, 1)] == ine_shift), 2))
         """
+        thisSoftConstraint = 1  # internal index code constraint on the solver
 
         for iday in range(self.num_days - 1):
-            self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
+            self.solver.Add(self.brkconstraints[thisSoftConstraint] == 1 *
                         self.solver.IsEqualCstVar(self.solver.IsEqualCstVar(self.shifts[(inurse, iday)], ishift) +
                                                   self.solver.IsEqualCstVar(self.shifts[(inurse, iday +1)], ine_shift), 2))
 
-        self.solver.Add(self.cost == penalty * self.brkconstraints[self.nconstraints])
-        self.brkconstraints_cost[self.nconstraints] = penalty
+        self.solver.Add(self.cost == penalty * self.brkconstraints[thisSoftConstraint])
+        self.brkconstraints_cost[thisSoftConstraint] = penalty
         self.nconstraints += 1
 
     def createDecisionBuilderPhase(self):
@@ -217,15 +226,21 @@ class SchedulingSolver:
         collector.AddObjective(self.cost)
 
         #solution_limit = self.solver.SolutionsLimit(1000)
+        self.time_limit = self.solver.TimeLimit(self._time_limit)
 
-        self.solver.Solve(self.db, [self.objective, collector] )
+        self.solver.Solve(self.db, [self.objective, self.time_limit, collector] )
 
-        print("Solutions found:", collector.SolutionCount())
+        found = collector.SolutionCount()
+        print("Solutions found:", found)
         print("Time:", self.solver.WallTime(), "ms")
         print()
-        best_solution = collector.SolutionCount() - 1
 
-        self.showSolutionToScreen(dsol, collector.ObjectiveValue(best_solution), collector)
+        if found > 0:
+            best_solution = collector.SolutionCount() - 1
+            self.showSolutionToScreen(dsol, collector.ObjectiveValue(best_solution), collector)
+        else:
+            print ("No solutions found on time limit ", (self._time_limit/1000), " sec, try to revise hard constraints.")
+
 
     def searchSolutions(self):
         """

@@ -171,6 +171,7 @@ class SchedulingSolver:
 
         self.addSoft_ShiftForNurseOnDay_NotEqualTo(2, 2, 2, 30)
         self.addSoft_ShiftForNurseOnDay_NotEqualTo(3, 6, 0, 30)
+        self.addSoft_ShiftForNurseOnADay_EqualTo(1, 1, 0, 90)
         #self.addSoft_AfterAShiftForNurseNextShift_NotEqualTo(2, 1, 1, 80)
         self.calculateSoftCost()
 
@@ -200,6 +201,26 @@ class SchedulingSolver:
 
         self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
                         self.solver.IsEqualCstVar(self.shifts[(inurse, iday)], ine_shift))
+
+        self.solver.Add(self.brkconstraints_where[self.nconstraints] == self.brkconstraints[self.nconstraints] *
+                        self._brkWhereSet(inurse, iday))
+
+        self.brkconstraints_cost[self.nconstraints] = penalty
+        self.nconstraints += 1
+
+    def addSoft_ShiftForNurseOnADay_EqualTo(self, inurse, iday, ie_shift, penalty):
+        """
+        Assing an specific shift to a nurse in a day, e.g assign a not working day (shift==0)
+        to a nurse in a specific day
+
+        :param inurse: the index number for the nurse
+        :iday: the day index to assign the shift
+        :param ie_shift: the shift index number
+        :param penalty: the pensalty cost to broke this constraint
+        :return: void
+        """
+        self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
+                        self.solver.IsDifferentCstVar(self.shifts[inurse, iday], ie_shift))
 
         self.solver.Add(self.brkconstraints_where[self.nconstraints] == self.brkconstraints[self.nconstraints] *
                         self._brkWhereSet(inurse, iday))

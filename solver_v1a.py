@@ -34,12 +34,35 @@ class SchedulingSolver:
         self.shifts_flat = []
         self.works_shift = {}
         self.cost = self.solver.IntVar(0, 1000, "cost")
+
         self.brkconstraints = {}
         self.brkconstraints_cost = []
+        self.brkconstraints_where = {}
+
         self.p = None
         self.n = None
         for i in range(self._maxsoftconstraints):
             self.brkconstraints_cost.append(0)
+
+    def _brkWhereSet(self, nurse, day):
+        """
+        Returns the code for a given broken constraint
+        :param nurse:
+        :param day:
+        :return: integer with the code of the nurse x day broken
+        """
+        return (nurse * self.num_days) + day
+
+    def _brkWhereGet(self, code):
+        """
+
+        :param code: integer with the code to get nurse and day broken
+        :return: String format like "(nurse,day)"
+        """
+        _fil = code/self.num_days
+        _col = (code % self.num_days)
+        _str = "(%i,%i)" % (_fil, _col)
+        return str(_str)
 
     def _ifexp1Andxp2(self, exp1, exp2):
         """
@@ -101,11 +124,8 @@ class SchedulingSolver:
 
         # Initialize list of broken constraints
         for i in range(self._maxsoftconstraints):
-            self.brkconstraints[i] = self.solver.IntVar(0,1,"brk %i" % i)
-
-        #local vars for the solver
-        self.p = self.solver.BoolVar("p")
-        self.n = self.solver.BoolVar("n")
+            self.brkconstraints[i] = self.solver.IntVar(0,1000,"brk %i" % i)
+            self.brkconstraints_where[i] = self.solver.IntVar(0, 10000, "brkw %i" %i)
 
     def hardConstraints(self):
         """
@@ -149,8 +169,20 @@ class SchedulingSolver:
         #solver.Add(solver.IsDifferentCstVar(shifts[(1, 0)],0))
 
 
+        self.addSoft_ShiftForNurseOnDay_NotEqualTo(2, 2, 2, 30)
         self.addSoft_ShiftForNurseOnDay_NotEqualTo(3, 6, 0, 30)
-        self.addSoft_AfterAShiftForNurseNextShift_NotEqualTo(2, 1, 1, 80)
+        #self.addSoft_AfterAShiftForNurseNextShift_NotEqualTo(2, 1, 1, 80)
+        self.calculateSoftCost()
+
+    def calculateSoftCost(self):
+        """
+        Calculate the total cost of the broken constraints
+
+        :return: void
+        """
+        self.solver.Add(self.solver.Sum((self.brkconstraints[i] * self.brkconstraints_cost[i])
+                                            for i in range(self.nconstraints)) == self.cost)
+
 
     def addSoft_ShiftForNurseOnDay_NotEqualTo(self, inurse, iday, ine_shift, penalty):
         """
@@ -164,13 +196,15 @@ class SchedulingSolver:
         #IsDifferentCstCar(intExp*, int) = intVar*
         #self.solver.Add(self.cost== 30* self.solver.IsDifferentCstVar(self.shifts[(3, 6)],0))
 
-        thisSoftConstraint = 0  # internal index code constraint on the solver
+        #thisSoftConstraint = 0  # internal index code constraint on the solver
 
-        self.solver.Add(self.brkconstraints[thisSoftConstraint] == 1 *
+        self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
                         self.solver.IsEqualCstVar(self.shifts[(inurse, iday)], ine_shift))
 
-        self.solver.Add(self.cost == penalty * self.brkconstraints[thisSoftConstraint])
-        self.brkconstraints_cost[thisSoftConstraint] = penalty
+        self.solver.Add(self.brkconstraints_where[self.nconstraints] == self.brkconstraints[self.nconstraints] *
+                        self._brkWhereSet(inurse, iday))
+
+        self.brkconstraints_cost[self.nconstraints] = penalty
         self.nconstraints += 1
 
     def addSoft_AfterAShiftForNurseNextShift_NotEqualTo(self, ishift, inurse, ine_shift, penalty):
@@ -192,12 +226,11 @@ class SchedulingSolver:
         thisSoftConstraint = 1  # internal index code constraint on the solver
 
         for iday in range(self.num_days - 1):
-            self.solver.Add(self.brkconstraints[thisSoftConstraint] == 1 *
+            self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
                         self.solver.IsEqualCstVar(self.solver.IsEqualCstVar(self.shifts[(inurse, iday)], ishift) +
                                                   self.solver.IsEqualCstVar(self.shifts[(inurse, iday +1)], ine_shift), 2))
 
-        self.solver.Add(self.cost == penalty * self.brkconstraints[thisSoftConstraint])
-        self.brkconstraints_cost[thisSoftConstraint] = penalty
+        self.brkconstraints_cost[self.nconstraints] = penalty
         self.nconstraints += 1
 
     def createDecisionBuilderPhase(self):
@@ -219,6 +252,7 @@ class SchedulingSolver:
         collector.Add(self.shifts_flat)
         for c in range(self.nconstraints):
             collector.Add(self.brkconstraints[c])
+            collector.Add(self.brkconstraints_where[c])
 
         # Add the objective and solve
 
@@ -296,12 +330,16 @@ class SchedulingSolver:
         for n in range (self.nconstraints):
             if collector is None:
                 cons=self.brkconstraints[n].Value()
-
+                where = self.brkconstraints_where[n].Value()
             else:
                 cons=collector.Value(dsoln, self.brkconstraints[n])
+                where=collector.Value(dsoln, self.brkconstraints_where[n])
+                #print (where)
+
             if cons == 1:
                 cons_count = cons_count +1
-                print ("Constraint %i breaked with cost %i" % (cons, self.brkconstraints_cost[n]) )
+                print ("Constraint %i breaked with cost %i on %s" % (n, self.brkconstraints_cost[n],
+                        self._brkWhereGet(where)) )
 
         print("Breaked soft constraints: %i \n" %cons_count)
 

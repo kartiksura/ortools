@@ -1,6 +1,10 @@
--Crear estructura de Puesto[Worker, Day]
+-Crear estructura de NPuestos[TipoPuesto, Day] = 0..99 num de puestos de un tipo al dia
+-Crear estructura de NTurnos[TipoTurno, Day] = 0..99 num de turnos de un tipo al dia
+-Crear estructura de Workers = [Nombre:string, (PuestosPosibles), (TurnosPosibles)] --DONE
+-Crear estructura de Puestos = [Nombre:string] --DONE
 
--Recgla para limitar Puestos x Worker x Dia (Hard) { pueden ser varios}
+
+-Regla para limitar Puestos x Worker x Dia (Hard) { pueden ser varios}
 -Regla para limitar Un Turno x Worker x Dia (Soft) { forzar un turno en un empleado en un dia }
 -Regla para limitar el TOTAL de Turnos x DeUnPuesto x Dia (Soft) { Dado un Puesto en concreto, en un dia, limitar los turnos máximos permitidos de un tipo }
 -Regla para limitar el TOTAL de Puestos x DeUnTurno x Dia (Soft) { Dado un turno en concreto, en un dia, limitar los puestos máximos  permitidos de ese tipo}

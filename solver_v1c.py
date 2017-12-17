@@ -5,21 +5,29 @@ from math import pow
 class SchedulingSolver:
     """
     Class for Scheduling problems
-    v 1.0 by Marc Farras
+    v 1.1 by Marc Farras
     """
 
     # Creates the solver.
-    solver = pywrapcp.Solver("schedule_shifts")
+    solver = pywrapcp.Solver("schedule_shifts_tasks")
 
     # Global Variables
-    num_workers = 4
-    num_days = 7
-    num_shifts = 4
-    nameShifts = ('-', 'M', 'T', 'N')
+    num_workers = 0
+    num_days = 0
+    nameShifts = []
+    num_shifts = 0
+    nameTasks = []
+    num_tasks = 0
+    nameWorkers = []
+    allWorkers = []
+    dayRequirements = []
+    NShifts = []
 
     # Global internal
     nconstraints = 0  #used to count the number of Soft constraints add to the system
-    _maxsoftconstraints = 10  # max number of soft constraints implemented in the solver version class
+
+    _maxsoftconstraints = 1000  # max number of soft constraints reserved space (can be updated)
+    _implementedsoftconstraints = 10 # number of implemented SOFT constraints on this solver version class
     _time_limit = 10000 # time limit for the solver in ms
 
 
@@ -33,6 +41,7 @@ class SchedulingSolver:
         self.objective = None
         self.shifts = {}
         self.workers = {}
+        self.tasks = {}
         self.shifts_flat = []
         self.works_shift = {}
         self.cost = self.solver.IntVar(0, 1000, "cost")
@@ -43,8 +52,6 @@ class SchedulingSolver:
 
         self.p = None
         self.n = None
-        for i in range(self._maxsoftconstraints):
-            self.brkconstraints_cost.append(0)
 
     def _brkWhereSet(self, worker, day, constraint):
         """
@@ -72,6 +79,19 @@ class SchedulingSolver:
         return str(_str)
 
 
+    def space(self, n):
+        """
+        Returns a string of n spaces inside
+
+        :param n:
+        :return: string
+        """
+        s = ""
+        for i in range(n):
+            s = str(s) + " "
+        return str(s)
+
+
     def _ifexp1Andxp2(self, exp1, exp2):
         """
         Eval if (exp1 AND exp2) are true
@@ -85,6 +105,64 @@ class SchedulingSolver:
         varexp2 = eval(exp2)
 
         return self.solver.IsEqualCstVar((varexp1 + varexp2), 2)
+
+
+    def loadData(self):
+        """
+        Load the data to the solver
+
+        :return:
+        """
+        #Load the shifts
+        self.nameShifts = ['-', 'M', 'T', 'N']  #shift 0 must be as non working shift
+        self.num_shifts = len(self.nameShifts)  # worker assigned to shift 0 means not working that day.
+
+        #Load the tasks
+        self.nameTasks = ['Operario','Supervisor', 'Revisor']
+        self.num_tasks = len(self.nameTasks)
+
+        #Load all the workers
+        self.allWorkers =[{'Name': 'Ope1', 'ATasks': [0], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Ope2', 'ATasks': [0], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Ope3', 'ATasks': [0, 2], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Ope4', 'ATasks': [2], 'AShifts': [0, 2, 3]},
+                          {'Name': 'Sup1', 'ATasks': [0,1], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Sup2', 'ATasks': [0, 1], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Sup3', 'ATasks': [1], 'AShifts': [0, 3]}]
+
+        #Set the workers for the problem
+        self.nameWorkers = self.allWorkers[:6]
+        self.num_workers = len(self.nameWorkers)
+
+        #Set the requirements for the tasks
+        #   For a specify day and shift,
+        #--------------------------------------------------
+        #   {'Operario': [2, 1, 0], 'Supervisor': [1, 1, 0], 'Revisor': [0, 0, 0]} = {[2, 1, 0],[1, 1, 0], [0, 0, 0]}
+        #   Day0 = 'Operario': [2, 1, 0]  -> Sets 2 workers for task 'Operario' on shift 1, 1 worker on shift 2 and none on the 3rd shift
+        #
+        #   ([2OM,1OT,0ON],[1SM,1ST,0SN],[0RM,0RT,0RN]) = DAY 0-5
+        #     .
+        #     .
+        #   ([2OM,2OT,1ON],[1SM,1ST,0SN],[0RM,ORT,1RN]) = DAY 6-7
+        #
+
+        self.dayRequirements = [([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+                                ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+                                ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+                                ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+                                ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+                                ([2, 2, 1], [1, 1, 0], [0, 0, 1]),
+                                ([2, 2, 1], [1, 1, 0], [0, 0, 1])]
+
+        self.num_days = len(self.dayRequirements)
+
+        #Generating the totallizers
+        # NTurnos = {ShiftTipe, day} The number of shiftTipe for each day
+
+        #for i in range(self.num_days):
+        #    for j in range(self.num_shifts)
+        #        self.NShifts.append()
+        #        self.NShifts[j, i]
 
 
     def definedModel(self):
@@ -103,7 +181,17 @@ class SchedulingSolver:
                 self.shifts[(j, i)] = self.solver.IntVar(0, self.num_shifts - 1, "shifts(%i,%i)" % (j, i))
         self.shifts_flat = [self.shifts[(j, i)] for j in range(self.num_workers) for i in range(self.num_days)]
 
+        # tasks[(worker, day)]
+        self.tasks = {}
+
+        for j in range(self.num_workers):
+            for i in range(self.num_days):
+                self.tasks[(j, i)] = self.solver.IntVar(0, self.num_tasks - 1, "tasks(%i,%i)" % (j, i))
+        self.tasks_flat = [self.tasks[(j, i)] for j in range(self.num_workers) for i in range(self.num_days)]
+
+        """
         # Create worker variables.
+        # -------------------------
         # workers[(shift, day)]
         self.workers = {}
 
@@ -117,7 +205,23 @@ class SchedulingSolver:
             for j in range(self.num_workers):
                 s = self.shifts[(j, day)]
                 self.solver.Add(s.IndexOf(workers_for_day) == j)
+        """
+        """
+        # taskworkers[(task, day)] (worker assigned to a task on a day)
+        self.taskworkers = {}
 
+        for j in range(self.num_tasks):
+            for i in range(self.num_days):
+                self.taskworkers[(j, i)] = self.solver.IntVar(0, self.num_workers - 1, "task%d day%d" % (j, i))
+
+        # Set relationships between tasks and workers.
+        for day in range(self.num_days):
+            taskworkers_for_day = [self.taskworkers[(j, day)] for j in range(self.num_tasks)]
+            for j in range(self.num_workers):
+                s = self.tasks[(j, day)]
+                self.solver.Add(s.IndexOf(taskworkers_for_day) == j)
+
+        """
         # Create works_shift variables. works_shift[(i, j)] is True if worker
         # i works shift j at least once during the week.
         self.works_shift = {}
@@ -126,16 +230,18 @@ class SchedulingSolver:
             for j in range(self.num_shifts):
                 self.works_shift[(i, j)] = self.solver.BoolVar('shift%d worker%d' % (i, j))
 
+        """
         for i in range(self.num_workers):
             for j in range(self.num_shifts):
                 self.solver.Add(self.works_shift[(i, j)] == self.solver.Max([self.shifts[(i, k)] == j
                                                                              for k in range(self.num_days)]))
+        """
 
         # Initialize list of broken constraints
         for i in range(self._maxsoftconstraints):
             self.brkconstraints[i] = self.solver.IntVar(0,1000,"brk %i" % i)
             self.brkconstraints_where[i] = self.solver.IntVar(0, 10000000, "brkw %i" %i)
-
+            self.brkconstraints_cost.append(0)
 
     def hardConstraints(self):
         """
@@ -144,13 +250,47 @@ class SchedulingSolver:
         :return: void
         """
         # HARD CONSTRAINTS
+
+        #self.addHardAllDifferentAssignments()
+        self.addHardWorkersMustBeAssignedToAllowedTasks()
+        # Each worker works 5 or 6 days in a week.
+        self.addHardMaxWorkingDays(5, 6)
+
+
+    def addHardMinShiftsWorkersPerDay(self):
+        """
+        Set the minimum number of shifts assignments to differents workers for a day
+        :return:
+        """
+
+    def addHardWorkersMustBeAssignedToAllowedTasks(self):
+        """
+        Set the assignments of the workers at those who has allowed taks
+
+        :return:
+        """
+        #Example:
+        #At least 2 M shifts must be set on day 0
+        exp1 = [self.shifts[(w, 0)] == 1 for w in range(self.num_workers)]
+        self.solver.Add(self.solver.Sum(exp1) >= 3)
+        #numero de supervisores assignados =1 en turno manana
+        exp2 = [self.tasks[(w, 0)] == 1 for w in range(self.num_workers)]
+        self.solver.Add(self.solver.Sum(exp2) == 1)
+        #for day in range(self.num_days):
+        #    self.solver.Add(self.taskworkers[(t, day)] == 1)
+
+
+
+    def addHardAllDifferentAssignments(self):
+        """
+        Set all differents shifts and workers
+        :return:
+        """
         # Make assignments different on each day
+        # All shifts must be assigned to a different worker and a all workers muts be assignet to a different whift
         for i in range(self.num_days):
             self.solver.Add(self.solver.AllDifferent([self.shifts[(j, i)] for j in range(self.num_workers)]))
             self.solver.Add(self.solver.AllDifferent([self.workers[(j, i)] for j in range(self.num_shifts)]))
-
-        # Each worker works 5 or 6 days in a week.
-        self.addHardMaxWorkingDays(5, 6)
 
 
     def addHardMaxWorkingDays(self, minwdays, maxwdays):
@@ -175,17 +315,24 @@ class SchedulingSolver:
 
         :return: void
         """
-        #SOFT CONSTRAINTS
+        #SOFT CONSTRAINTS EXAMPLE
         # worker = 1 penalize 30 cost if work on day = 0
         #   shifts[(1, 0)] != 0  (worker 1 on day 0) !=0 (working, 0 mean working)
         #solver.Add(solver.IsDifferentCstVar(shifts[(1, 0)],0))
 
 
-        self.addSoft_ShiftForworkerOnDay_NotEqualTo(2, 2, 2, 30)
-        self.addSoft_ShiftForworkerOnDay_NotEqualTo(3, 6, 0, 30)
-        self.addSoft_ShiftForworkerOnADay_EqualTo(1, 1, 0, 90)
-        self.addSoft_AfterAShiftForworkerNextShift_NotEqualTo(1, 1, 0, 80)
+        #---Define the Soft constraints to use on the problem-----
+        #self.addSoft_ShiftForworkerOnDay_NotEqualTo(2, 2, 2, 30)
+        #self.addSoft_ShiftForworkerOnDay_NotEqualTo(3, 6, 0, 30)
+        #self.addSoft_ShiftForworkerOnADay_EqualTo(1, 1, 0, 90)
+        #self.addSoft_AfterAShiftForworkerNextShift_NotEqualTo(1, 1, 0, 80)
 
+        #Load soft constraints for the allowed Shifts of the workers
+        for w in range(self.num_workers):
+            print ("debug.Setting Allowed shift for %s are %s" %(self.nameWorkers[w]['Name'],self.nameWorkers[w]['AShifts']))
+            self.addSoft_AllowedShiftsToWorker(w, self.nameWorkers[w]['AShifts'], 40 )
+
+        #------
         #the last constraint is to calculate the final cost
         self.calculateSoftCost()
 
@@ -224,6 +371,28 @@ class SchedulingSolver:
         self.nconstraints += 1
 
 
+    def addSoft_AllowedShiftsToWorker(self, iworker, ashift, penalty):
+        """
+        Set for a set of alloweds shifts
+
+        :param iworker: index for the worker
+        :param ashift: a list of allowed shifts indexes
+        :param penalty: the cost for to broke this constraint
+        :return: void
+        """
+        thisSoftConstraint = 2  # internal index code constraint on the solver, must be > 0
+        num_ashifts = len(ashift)
+
+        for i in range(self.num_days):
+            temp = [self.shifts[iworker, i] == ashift[s] for s in range(num_ashifts)]
+            #print ("Debug.Day %i Debug.temp=%s " % (i,temp))
+            self.solver.Add(self.brkconstraints[self.nconstraints] == 1 * (self.solver.Max(temp) == 0))
+            self.solver.Add(self.brkconstraints_where[self.nconstraints] == self.brkconstraints[self.nconstraints] *
+                        self._brkWhereSet(iworker, i, thisSoftConstraint))
+            self.brkconstraints_cost[self.nconstraints] = penalty
+            self.nconstraints += 1
+
+
     def addSoft_ShiftForworkerOnADay_EqualTo(self, iworker, iday, ie_shift, penalty):
         """
         Assing an specific shift to a worker in a day, e.g assign a not working day (shift==0)
@@ -236,7 +405,7 @@ class SchedulingSolver:
         :return: void
         """
 
-        thisSoftConstraint = 2  # internal index code constraint on the solver, must be > 0
+        thisSoftConstraint = 3  # internal index code constraint on the solver, must be > 0
 
         self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
                         self.solver.IsDifferentCstVar(self.shifts[iworker, iday], ie_shift))
@@ -264,7 +433,7 @@ class SchedulingSolver:
                         self.solver.IsEqualCstVar((self.shifts[(iworker, 0)] == ishift) +
                                                   (self.shifts[(iworker, 1)] == ine_shift), 2))
         """
-        thisSoftConstraint = 3  # internal index code constraint on the solver, must be > 0
+        thisSoftConstraint = 4  # internal index code constraint on the solver, must be > 0
 
         for iday in range(self.num_days - 1):
             self.solver.Add(self.brkconstraints[self.nconstraints] == 1 *
@@ -279,8 +448,10 @@ class SchedulingSolver:
     def createDecisionBuilderPhase(self):
 
         # Create the decision builder.
-        self.db = self.solver.Phase(self.shifts_flat, self.solver.ASSIGN_MIN_VALUE, self.solver.CHOOSE_FIRST_UNBOUND)
+        vars = self.shifts_flat + self.tasks_flat
+        self.db = self.solver.Phase(vars, self.solver.ASSIGN_MIN_VALUE, self.solver.CHOOSE_FIRST_UNBOUND)
 
+        #TODO : Create composed db for both assignment problems shefts and tasks
 
     def searchSolutionsCollector(self, dsol):
         """
@@ -293,6 +464,7 @@ class SchedulingSolver:
 
         collector = self.solver.LastSolutionCollector()
         collector.Add(self.shifts_flat)
+        collector.Add(self.tasks_flat)
         for c in range(self.nconstraints):
             collector.Add(self.brkconstraints[c])
             collector.Add(self.brkconstraints_where[c])
@@ -359,12 +531,13 @@ class SchedulingSolver:
         print("          ", day_str)
 
         for j in range(self.num_workers):
-            shift_str = "worker %s      " % j
+            shift_str = self.nameWorkers[j]['Name'] + self.space(9)
             for i in range(self.num_days):
                 if collector is None:
                     shift_str = shift_str + str(self.nameShifts[self.shifts[(j, i)].Value()]) + "     "
                 else:
-                    shift_str = shift_str + str(self.nameShifts[collector.Value(dsoln, self.shifts[(j, i)])]) + "     "
+                    shift_str = shift_str + str(self.nameTasks[collector.Value(dsoln, self.tasks[(j, i)])])[0]  + \
+                                str(self.nameShifts[collector.Value(dsoln, self.shifts[(j, i)])]) + "    "
 
             print(shift_str)
 
@@ -382,7 +555,7 @@ class SchedulingSolver:
 
             if cons == 1:
                 cons_count = cons_count +1
-                print ("#%i breaked %s with cost %i" % (n, self._brkWhereGet(where),
+                print ("#%i breaked %s with cost %i" % (n+1, self._brkWhereGet(where),
                         self.brkconstraints_cost[n]) )
 
         print("Breaked soft constraints: %i of %i inserted constraints (%.1f%%)\n" %
@@ -398,6 +571,7 @@ def main():
 
     mysched = SchedulingSolver()
 
+    mysched.loadData()
     mysched.definedModel()
     mysched.hardConstraints()
     mysched.softConstraints()

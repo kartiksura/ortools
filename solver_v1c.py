@@ -8,6 +8,8 @@ class SchedulingSolver:
     v 1.1 by Marc Farras
     """
 
+    #TODO:  Cost to assign a task for a worker (soft)
+
     # Creates the solver.
     solver = pywrapcp.Solver("schedule_shifts_tasks")
 
@@ -122,13 +124,13 @@ class SchedulingSolver:
         self.num_tasks = len(self.nameTasks)
 
         #Load all the workers
-        self.allWorkers =[{'Name': 'Ope1', 'ATasks': [1], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Ope2', 'ATasks': [1], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Ope3', 'ATasks': [1, 3], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Ope4', 'ATasks': [3], 'AShifts': [0, 2, 3]},
-                          {'Name': 'Sup1', 'ATasks': [1,2], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Sup2', 'ATasks': [1, 2], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Sup3', 'ATasks': [2], 'AShifts': [0, 3]}]
+        self.allWorkers =[{'Name': 'Ope1', 'ATasks': [0, 1], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Ope2', 'ATasks': [0, 1], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Ope3', 'ATasks': [0, 1, 3], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Ope4', 'ATasks': [0, 3], 'AShifts': [0, 2, 3]},
+                          {'Name': 'Sup1', 'ATasks': [0, 2, 3], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Sup2', 'ATasks': [0, 1, 2], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Sup3', 'ATasks': [0, 2], 'AShifts': [0, 3]}]
 
         #Set the workers for the problem
         self.nameWorkers = self.allWorkers[:6]
@@ -215,15 +217,36 @@ class SchedulingSolver:
         #TODO: Why the assignation to 4 OM and 2 SM does not work with 6 workers and unique hard constraint?
         # self.addHardWorkersMustBeAssignedToAllowedTasks()
 
-        # Set all the tasks for all the workers as hard constraints
+        # Set all the allowed tasks for all the workers as hard constraints
         for w in range(self.num_workers):
             self.addHardAllowedTasksForWorker(w, self.nameWorkers[w]['ATasks'])
+
+        # Set the scheduling min requirements
+        self.addHardMinRequired_TaskForShift_onDay(2, 1, 1 ,0)
+
+        # Set the scheduling number of working days from the requirement
         # Each worker works 5 or 6 days in a week.
+
         #self.addHardMaxWorkingDays(5, 6)
 
 
-    def addHardMinRequired_TasksAndShifts_ForADay(self, rtasks, rshifts):
+    def addHardMinRequired_TaskForShift_onDay(self, nworkers, rtask, rshift, iday):
+        """
+        Set the Minumum required workers to do the task in the specified shift for a day
+            * Shifts are not hard constraints so it will be assignet to a worker for a penalty cost
 
+        :param rworkers: Required number of workers to assign
+        :param rtasks: Required task array for a day
+        :param rshifts: Required shifts for the tasks
+        :param iday: The index for the assignment day
+        :return: void
+        """
+
+        #print ("debug.Assigning %i workers to day %i doint task %s for shift %s" %(nworkers, iday,
+        #        self.nameTasks[rtask], self.nameShifts[rshift]))
+
+        exp = [(self.tasks[(w, iday)] == rtask) * (self.shifts[(w, iday)] == rshift) for w in range(self.num_workers)]
+        self.solver.Add(self.solver.Sum(exp) >= nworkers)
 
     def addHardAllowedTasksForWorker(self, iworker, atasks):
         """
@@ -232,7 +255,9 @@ class SchedulingSolver:
         :param atasks: The tasks array to set
         :return: void
         """
-        print ("debug.Setting allowed tasks for worker %s are %s" %(self.nameWorkers[iworker]['Name'], str(atasks)))
+
+        #print ("debug.Setting allowed tasks for worker %s are %s" %(self.nameWorkers[iworker]['Name'], str(atasks)))
+
         for i in range(self.num_days):
             exp = [self.tasks[iworker, i] == atasks[t] for t in range(len(atasks))]
             self.solver.Add(self.solver.Max(exp) == 1)

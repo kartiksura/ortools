@@ -30,9 +30,7 @@ class SchedulingSolver:
 
     _maxsoftconstraints = 1000  # max number of soft constraints reserved space (can be updated)
     _implementedsoftconstraints = 10 # number of implemented SOFT constraints on this solver version class
-    _time_limit = 5000 # time limit for the solver in ms
-
-
+    _time_limit = 15000 # time limit for the solver in ms
 
 
     def __init__(self):
@@ -126,14 +124,15 @@ class SchedulingSolver:
         #Load all the workers
         self.allWorkers =[{'Name': 'Ope1', 'ATasks': [0, 1], 'AShifts': [0, 1, 2]},
                           {'Name': 'Ope2', 'ATasks': [0, 1], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Ope3', 'ATasks': [0, 1, 3], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Ope4', 'ATasks': [0, 3], 'AShifts': [0, 2, 3]},
+                          {'Name': 'Ope3', 'ATasks': [0, 1], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Ope4', 'ATasks': [0, 1, 3], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Rev1', 'ATasks': [0, 3], 'AShifts': [0, 2, 3]},
                           {'Name': 'Sup1', 'ATasks': [0, 2, 3], 'AShifts': [0, 1, 2, 3]},
                           {'Name': 'Sup2', 'ATasks': [0, 1, 2], 'AShifts': [0, 1, 2, 3]},
                           {'Name': 'Sup3', 'ATasks': [0, 2], 'AShifts': [0, 3]}]
 
         #Set the workers for the problem
-        self.nameWorkers = self.allWorkers[:6]
+        self.nameWorkers = self.allWorkers[:7]
         self.num_workers = len(self.nameWorkers)
 
         #Set the requirements for the tasks
@@ -148,7 +147,7 @@ class SchedulingSolver:
         #   ([2OM,2OT,1ON],[1SM,1ST,0SN],[0RM,ORT,1RN]) = DAY 6-7
         #
 
-        self.dayRequirements = [([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+        self.allRequirements = [([2, 1, 0], [1, 1, 0], [0, 0, 0]),
                                 ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
                                 ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
                                 ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
@@ -156,16 +155,8 @@ class SchedulingSolver:
                                 ([2, 2, 1], [1, 1, 0], [0, 0, 1]),
                                 ([2, 2, 1], [1, 1, 0], [0, 0, 1])]
 
+        self.dayRequirements = self.allRequirements[:2]
         self.num_days = len(self.dayRequirements)
-        self.num_days = 2
-
-        #Generating the totallizers
-        # NTurnos = {ShiftTipe, day} The number of shiftTipe for each day
-
-        #for i in range(self.num_days):
-        #    for j in range(self.num_shifts)
-        #        self.NShifts.append()
-        #        self.NShifts[j, i]
 
 
     def definedModel(self):
@@ -205,6 +196,7 @@ class SchedulingSolver:
             self.brkconstraints_where[i] = self.solver.IntVar(0, 10000000, "brkw %i" %i)
             self.brkconstraints_cost.append(0)
 
+
     def hardConstraints(self):
         """
         Define de Hard constraints for the problem, solver will search the feasible solutions
@@ -221,8 +213,13 @@ class SchedulingSolver:
         for w in range(self.num_workers):
             self.addHardAllowedTasksForWorker(w, self.nameWorkers[w]['ATasks'])
 
-        # Set the scheduling min requirements
-        self.addHardMinRequired_TaskForShift_onDay(2, 1, 1 ,0)
+        # Set the scheduling min requirements for all the days
+        for d in range(self.num_days):
+            for t in range(self.num_tasks-1):
+                for s in range(self.num_shifts-1):
+                    _nworkers = self.dayRequirements[d][t][s]
+                    if _nworkers > 0:
+                        self.addHardMinRequired_TaskForShift_onDay(_nworkers, t+1, s+1 ,d)
 
         # Set the scheduling number of working days from the requirement
         # Each worker works 5 or 6 days in a week.
@@ -242,8 +239,8 @@ class SchedulingSolver:
         :return: void
         """
 
-        #print ("debug.Assigning %i workers to day %i doint task %s for shift %s" %(nworkers, iday,
-        #        self.nameTasks[rtask], self.nameShifts[rshift]))
+        print ("debug.Assigning %i workers to day %i at task %s for shift %s" %(nworkers, iday,
+                self.nameTasks[rtask], self.nameShifts[rshift]))
 
         exp = [(self.tasks[(w, iday)] == rtask) * (self.shifts[(w, iday)] == rshift) for w in range(self.num_workers)]
         self.solver.Add(self.solver.Sum(exp) >= nworkers)
@@ -256,7 +253,7 @@ class SchedulingSolver:
         :return: void
         """
 
-        #print ("debug.Setting allowed tasks for worker %s are %s" %(self.nameWorkers[iworker]['Name'], str(atasks)))
+        print ("debug.Setting allowed tasks for worker %s are %s" %(self.nameWorkers[iworker]['Name'], str(atasks)))
 
         for i in range(self.num_days):
             exp = [self.tasks[iworker, i] == atasks[t] for t in range(len(atasks))]
@@ -279,7 +276,6 @@ class SchedulingSolver:
 
         exp1 = [(self.tasks[(w, 0)] == 1) * (self.shifts[(w, 0)] == 1) for w in range(self.num_workers)]
         exp2 = [(self.tasks[(w, 0)] == 2) * (self.shifts[(w, 0)] == 1) for w in range(self.num_workers)]
-        #print (exp3)
         self.solver.Add(self.solver.Sum(exp1) >= 4)
         self.solver.Add(self.solver.Sum(exp2) >= 2)
 
@@ -321,7 +317,7 @@ class SchedulingSolver:
         #Load soft constraints for the allowed Shifts of the workers
         """
         for w in range(self.num_workers):
-            print ("debug.Setting Allowed shift for %s are %s" %(self.nameWorkers[w]['Name'],self.nameWorkers[w]['AShifts']))
+            print ("debug.Setting the shift for %s to %s" %(self.nameWorkers[w]['Name'],self.nameWorkers[w]['AShifts']))
             self.addSoft_AllowedShiftsToWorker(w, self.nameWorkers[w]['AShifts'], 40 )
         """
         #------

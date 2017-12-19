@@ -30,7 +30,7 @@ class SchedulingSolver:
 
     _maxsoftconstraints = 1000  # max number of soft constraints reserved space (can be updated)
     _implementedsoftconstraints = 10 # number of implemented SOFT constraints on this solver version class
-    _time_limit = 15000 # time limit for the solver in ms
+    _time_limit = 10000 # time limit for the solver in ms
 
 
     def __init__(self):
@@ -210,16 +210,23 @@ class SchedulingSolver:
         # self.addHardWorkersMustBeAssignedToAllowedTasks()
 
         # Set all the allowed tasks for all the workers as hard constraints
-        for w in range(self.num_workers):
-            self.addHardAllowedTasksForWorker(w, self.nameWorkers[w]['ATasks'])
+        #for w in range(self.num_workers):
+        #    self.addHardAllowedTasksForWorker(w, self.nameWorkers[w]['ATasks'])
 
         # Set the scheduling min requirements for all the days
-        for d in range(self.num_days):
+
+        for d in range(1):
             for t in range(self.num_tasks-1):
+                _nworkers = 0
                 for s in range(self.num_shifts-1):
-                    _nworkers = self.dayRequirements[d][t][s]
-                    if _nworkers > 0:
-                        self.addHardMinRequired_TaskForShift_onDay(_nworkers, t+1, s+1 ,d)
+                    _nworkers = _nworkers + self.dayRequirements[d][t][s]
+                if _nworkers > 0:
+                    self.addHardMinRequired_Task_onDay(_nworkers, t + 1, d)
+
+        #self.addHardMinRequired_Task_onDay(2, 1, 0)
+
+        # For all the workers with an assigned task it must have a shift too
+        #self.addHardWorkerWithTaskMustHaveShift()
 
         # Set the scheduling number of working days from the requirement
         # Each worker works 5 or 6 days in a week.
@@ -227,23 +234,42 @@ class SchedulingSolver:
         #self.addHardMaxWorkingDays(5, 6)
 
 
-    def addHardMinRequired_TaskForShift_onDay(self, nworkers, rtask, rshift, iday):
+    def addHardMinRequired_Task_onDay(self, nworkers, rtask, iday):
         """
         Set the Minumum required workers to do the task in the specified shift for a day
             * Shifts are not hard constraints so it will be assignet to a worker for a penalty cost
 
         :param rworkers: Required number of workers to assign
         :param rtasks: Required task array for a day
-        :param rshifts: Required shifts for the tasks
         :param iday: The index for the assignment day
         :return: void
         """
 
-        print ("debug.Assigning %i workers to day %i at task %s for shift %s" %(nworkers, iday,
-                self.nameTasks[rtask], self.nameShifts[rshift]))
+        #print ("debug.Assigning %i workers to day %i at task %s for shift %s" %(nworkers, iday,
+        #        self.nameTasks[rtask], self.nameShifts[rshift]))
+        print ("debug.Assigning %i workers to day %i at task %s " %(nworkers, iday, self.nameTasks[rtask]))
 
-        exp = [(self.tasks[(w, iday)] == rtask) * (self.shifts[(w, iday)] == rshift) for w in range(self.num_workers)]
-        self.solver.Add(self.solver.Sum(exp) >= nworkers)
+        #exp = [((self.tasks[(w, iday)] == rtask) * (self.shifts[(w, iday)] != 0))  for w in range(self.num_workers)]
+
+        #exp = [(self.tasks[(w, iday)] == rtask) for w in range(self.num_workers)]
+        for w in range(self.num_workers):
+            exp1 = (self.tasks[(w, iday)] == 1) * (self.shifts[(w, iday)] >= 1)
+            exp2 = (self.tasks[(w, iday)] == 2) * (self.shifts[(w, iday)] >= 1)
+            self.solver.Add(self.solver.Max(exp1,exp2) == 1)
+
+
+
+    def addHardWorkerWithTaskMustHaveShift(self):
+        """
+        For all workers with a task it must have a shift assigned to them
+
+        :return:
+        """
+        for d in range(self.num_days):
+            for w in range(self.num_workers):
+                exp =(self.tasks[(w, d)] !=0) * (self.shifts[(w, d)] !=0)
+                self.solver.Add(exp == 1)
+
 
     def addHardAllowedTasksForWorker(self, iworker, atasks):
         """

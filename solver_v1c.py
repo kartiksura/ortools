@@ -255,9 +255,11 @@ class SchedulingSolver:
         for w in range(self.num_workers):
             exp1 = (self.tasks[(w, iday)] == 1) * (self.shifts[(w, iday)] >= 1)
             exp2 = (self.tasks[(w, iday)] == 2) * (self.shifts[(w, iday)] >= 1)
-            self.solver.Add(self.solver.Max(exp1,exp2) == 1)
+            exp3 = (self.tasks[(w, iday)] == 0) * (self.shifts[(w, iday)] == 0)
+            self.solver.Add(self.solver.Max(exp1,self.solver.Max(exp2, exp3) == 1) == 1)
 
-
+        self.solver.Add(self.solver.Sum([self.tasks[(w, iday)] == 1 for w in range(self.num_workers)]) == 1)
+        self.solver.Add(self.solver.Sum([self.tasks[(w, iday)] == 2 for w in range(self.num_workers)]) == 1)
 
     def addHardWorkerWithTaskMustHaveShift(self):
         """

@@ -182,14 +182,48 @@ class SchedulingSolver:
             for i in range(self.num_days):
                 self.tasks[(j, i)] = self.solver.IntVar(0, self.num_tasks - 1, "tasks(%i,%i)" % (j, i))
         self.tasks_flat = [self.tasks[(j, i)] for j in range(self.num_workers) for i in range(self.num_days)]
+
         """
-        # Set relationships between shifts and workers.
+          # Set relationships between shifts and nurses.
+              for day in range(num_days):
+                nurses_for_day = [nurses[(j, day)] for j in range(num_shifts)]
+            
+                for j in range(num_nurses):
+                  s = shifts[(j, day)]
+                  solver.Add(s.IndexOf(nurses_for_day) == j)
+            
+            For each day, nurses_for_day contains the nurse assignments for that day. On any given day,
+            
+                  s = shifts[(j, day)]
+            
+            means that shift s is assigned to nurse j. We want to add the constraint that nurse j is assigned to shift s — in other words, that nurses_for_day[s] = j. You can specify this constraint by the IndexOf method: s.IndexOf(nurses_for_day) returns nurses_for_day[s]. As a result,
+            
+                  solver.Add(s.IndexOf(nurses_for_day) == j)
+            
+            adds precisely the constraint that nurses_for_day[s] == j. 
+        """
+        # Set relationships between shifts and tasks per day.
+
+        self.tasksShiftsDay = {}   # tasksShiftsDay[ task, day] = shift assignet for this task on this day
+        for j in range(self.num_tasks):
+            for i in range(self.num_days):
+                self.tasksShiftsDay[(j, i)] = self.solver.IntVar(0, self.num_shifts - 1, "taskShift(%i,%i)" % (j, i))
+
         for day in range(self.num_days):
-            workers_for_day = [self.workers[(j, day)] for j in range(self.num_shifts)]
+            taskOnDay = [self.tasksShiftsDay[(t, day)] for t in range(self.num_tasks)]
+            for w in range(self.num_workers):
+                s = self.tasks[(w, day)]
+                # taskOnDay[s] = w
+                self.solver.Add(s.IndexOf(taskOnDay) == self.shifts[(w,day)])
+
+        """
+        for day in range(self.num_days):
+            tasks_shifts = [self.workers[(j, day)] for j in range(self.num_shifts)]
             for j in range(self.num_workers):
                 s = self.shifts[(j, day)]
                 self.solver.Add(s.IndexOf(workers_for_day) == j)
         """
+
         # Initialize list of broken constraints
         for i in range(self._maxsoftconstraints):
             self.brkconstraints[i] = self.solver.IntVar(0,1000,"brk %i" % i)
@@ -252,14 +286,15 @@ class SchedulingSolver:
         #exp = [((self.tasks[(w, iday)] == rtask) * (self.shifts[(w, iday)] != 0))  for w in range(self.num_workers)]
 
         #exp = [(self.tasks[(w, iday)] == rtask) for w in range(self.num_workers)]
-        for w in range(self.num_workers):
-            exp1 = (self.tasks[(w, iday)] == 1) * (self.shifts[(w, iday)] >= 1)
-            exp2 = (self.tasks[(w, iday)] == 2) * (self.shifts[(w, iday)] >= 1)
-            exp3 = (self.tasks[(w, iday)] == 0) * (self.shifts[(w, iday)] == 0)
-            self.solver.Add(self.solver.Max(exp1,self.solver.Max(exp2, exp3) == 1) == 1)
+        #for w in range(self.num_workers):
+        #    exp1 = (self.tasks[(w, iday)] == 1) * (self.shifts[(w, iday)] >= 1)
+        #    exp2 = (self.tasks[(w, iday)] == 2) * (self.shifts[(w, iday)] >= 1)
+        #    exp3 = (self.tasks[(w, iday)] == 0) * (self.shifts[(w, iday)] == 0)
+        #    self.solver.Add(self.solver.Max(exp1,self.solver.Max(exp2, exp3) == 1) == 1)
 
-        self.solver.Add(self.solver.Sum([self.tasks[(w, iday)] == 1 for w in range(self.num_workers)]) == 1)
+        self.solver.Add(self.solver.Sum([self.tasks[(w, iday)] == 1 for w in range(self.num_workers)]) == 3)
         self.solver.Add(self.solver.Sum([self.tasks[(w, iday)] == 2 for w in range(self.num_workers)]) == 1)
+        self.solver.Add(self.solver.Sum([self.tasksShiftsDay[(1, iday)] == 1]))
 
     def addHardWorkerWithTaskMustHaveShift(self):
         """
@@ -477,11 +512,13 @@ class SchedulingSolver:
         :return: dsol: solution number to display
         """
 
+        taskshift_flat = [self.tasksShiftsDay[(j, i)] for j in range(self.num_tasks) for i in range(self.num_days)]
         # Create a solution collector.
 
         collector = self.solver.LastSolutionCollector()
         collector.Add(self.shifts_flat)
         collector.Add(self.tasks_flat)
+        collector.Add(taskshift_flat)
         for c in range(self.nconstraints):
             collector.Add(self.brkconstraints[c])
             collector.Add(self.brkconstraints_where[c])
@@ -534,6 +571,18 @@ class SchedulingSolver:
                                 str(self.nameShifts[collector.Value(dsoln, self.shifts[(j, i)])]) + "    "
 
             print(shift_str)
+        #DEBUG
+        t_str = ""
+        s_str = ""
+        print("---------------------------------------------------------------------------")
+        print ("Assigned Shifts to the tasks: ")
+        print (self.num_days)
+        for t in range(1, self.num_tasks):
+            t_str = "Task " + self.nameTasks[t][:6] + "  "
+            s_str = ""
+            for d in range(self.num_days):
+                s_str = s_str + str(collector.Value(dsoln, self.tasksShiftsDay[(t, d)])) + "  "
+            print (t_str + "  " + s_str)
 
         # show braked constraints (soft)
         print("---------------------------------------------------------------------------")

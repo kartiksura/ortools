@@ -292,9 +292,18 @@ class SchedulingSolver:
         #    exp3 = (self.tasks[(w, iday)] == 0) * (self.shifts[(w, iday)] == 0)
         #    self.solver.Add(self.solver.Max(exp1,self.solver.Max(exp2, exp3) == 1) == 1)
 
-        self.solver.Add(self.solver.Sum([self.tasks[(w, iday)] == 1 for w in range(self.num_workers)]) == 3)
-        self.solver.Add(self.solver.Sum([self.tasks[(w, iday)] == 2 for w in range(self.num_workers)]) == 1)
-        self.solver.Add(self.solver.Sum([self.tasksShiftsDay[(1, iday)] == 1]))
+        o = 2
+        s = 4
+        # set the number os tasks to do on this day
+        self.solver.Add(self.solver.SumGreaterOrEqual([self.solver.IsEqualCstVar(self.tasks[(w, iday)], 1)
+                                                       for w in range(self.num_workers)] ,o))
+        self.solver.Add(self.solver.SumGreaterOrEqual([self.solver.IsEqualCstVar(self.tasks[(w, iday)], 2)
+                                                       for w in range(self.num_workers)] ,s))
+        # set the shift for the workers with task assigned
+        self.solver.Add(self.solver.Sum([((self.tasks[(w, iday)] == 1) * (self.shifts[(w, iday)] >= 1))
+                                         for w in range(self.num_workers)]) >= o )
+        self.solver.Add(self.solver.Sum([((self.tasks[(w, iday)] == 2) * (self.shifts[(w, iday)] >= 1))
+                                         for w in range(self.num_workers)]) >= s )
 
     def addHardWorkerWithTaskMustHaveShift(self):
         """
@@ -495,11 +504,23 @@ class SchedulingSolver:
             self.brkconstraints_cost[self.nconstraints] = penalty
             self.nconstraints += 1
 
+    def ComposeDb(self):
+        """
+          first_solution = solver.Assignment()
+          first_solution.Add(x)
+          first_solution.AddObjective(objective_var)
+          store_db = solver.StoreAssignment(first_solution)
+          first_solution_db = solver.Compose([assign_db, store_db])
+          print('searching for initial solution,', end=' ')
+          solver.Solve(first_solution_db)
+          print('initial cost =', first_solution.ObjectiveValue())
+        """
+
 
     def createDecisionBuilderPhase(self):
 
         # Create the decision builder.
-        vars = self.shifts_flat + self.tasks_flat
+        vars = self.tasks_flat + self.shifts_flat
         self.db = self.solver.Phase(vars, self.solver.ASSIGN_MIN_VALUE, self.solver.CHOOSE_FIRST_UNBOUND)
 
         #TODO : Create composed db for both assignment problems shefts and tasks
@@ -574,17 +595,18 @@ class SchedulingSolver:
         #DEBUG
         t_str = ""
         s_str = ""
-        print("---------------------------------------------------------------------------")
-        print ("Assigned Shifts to the tasks: ")
-        print (self.num_days)
-        for t in range(1, self.num_tasks):
-            t_str = "Task " + self.nameTasks[t][:6] + "  "
-            s_str = ""
-            for d in range(self.num_days):
-                s_str = s_str + str(collector.Value(dsoln, self.tasksShiftsDay[(t, d)])) + "  "
-            print (t_str + "  " + s_str)
+        if (False):
+            print("---------------------------------------------------------------------------")
+            print ("Assigned Shifts to the tasks: ")
+            print (self.num_days)
+            for t in range(1, self.num_tasks):
+                t_str = "Task " + self.nameTasks[t][:6] + "  "
+                s_str = ""
+                for d in range(self.num_days):
+                    s_str = s_str + str(collector.Value(dsoln, self.tasksShiftsDay[(t, d)])) + "  "
+                print (t_str + "  " + s_str)
 
-        # show braked constraints (soft)
+            # show braked constraints (soft)
         print("---------------------------------------------------------------------------")
         cons_count = 0
         for n in range (self.nconstraints):

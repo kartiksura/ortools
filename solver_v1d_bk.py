@@ -40,7 +40,7 @@ class SchedulingSolver:
         self.db = None
         self.objective = None
         self.shifts = {}
-        self.worker = {}
+        self.workers = {}
         self.tasks = {}
         self.shifts_flat = []
         self.works_shift = {}
@@ -184,16 +184,16 @@ class SchedulingSolver:
         self.tasks_flat = [self.tasks[(j, i)] for j in range(self.num_workers) for i in range(self.num_days)]
 
         # workers[(task, day)] = worker
-        self.worker = {}
+        self.workers = {}
 
         for j in range(self.num_tasks):
             for i in range(self.num_days):
-                self.worker[(j, i)] = self.solver.IntVar(0, self.num_workers - 1, "workers(%i,%i)" % (j, i))
-        self.workers_flat = [self.worker[(j, i)] for j in range(self.num_tasks) for i in range(self.num_days)]
+                self.workers[(j, i)] = self.solver.IntVar(0, self.num_workers - 1, "workers(%i,%i)" % (j, i))
+        self.workers_flat = [self.workers[(j, i)] for j in range(self.num_tasks) for i in range(self.num_days)]
 
         # Set relationships between tasks and workers.
         for day in range(self.num_days):
-            workers_for_day = [self.worker[(w, day)] for w in range(self.num_tasks)]
+            workers_for_day = [self.workers[(w, day)] for w in range(self.num_tasks)]
 
             for w in range(self.num_workers):
                 t = self.tasks[(w, day)]
@@ -259,7 +259,7 @@ class SchedulingSolver:
         #exp = [((self.tasks[(w, iday)] == rtask) * (self.shifts[(w, iday)] != 0))  for w in range(self.num_workers)]
 
         # set the number os tasks to do on this day
-        self.solver.Add(self.solver.SumGreaterOrEqual([self.solver.IsEqualCstVar(self.worker[(rtask, iday)], rtask)
+        self.solver.Add(self.solver.SumGreaterOrEqual([self.solver.IsEqualCstVar(self.tasks[(w, iday)], rtask)
                                                        for w in range(self.num_workers)] ,nworkers))
         # set the shift for the workers with task assigned
         #self.solver.Add(self.solver.Sum([((self.tasks[(w, iday)] == rtask) * (self.shifts[(w, iday)] >= 1))

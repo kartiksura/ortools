@@ -295,6 +295,7 @@ class SchedulingSolver:
         o = 2
         s = 4
         # set the number os tasks to do on this day
+
         self.solver.Add(self.solver.SumGreaterOrEqual([self.solver.IsEqualCstVar(self.tasks[(w, iday)], 1)
                                                        for w in range(self.num_workers)] ,o))
         self.solver.Add(self.solver.SumGreaterOrEqual([self.solver.IsEqualCstVar(self.tasks[(w, iday)], 2)

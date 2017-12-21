@@ -255,7 +255,11 @@ class SchedulingSolver:
 
         :return:
         """
-        self.solver.Add(self.solver.IsEqualCstVar((self.tasks[(0, 0)] == 0) * (self.shifts[(0, 0)] == 0), 1))
+        self.solver.Add((self.tasks[(0, 0)] == 0) * (self.shifts[(0, 0)] == 0) == 1)
+        self.solver.Add((self.tasks[(1, 0)] == 0) * (self.shifts[(1, 0)] == 0) == 1)
+        exp = ((self.tasks[(2, 0)] == 0) * (self.shifts[(2, 0)] == 0)) == 1
+        print (exp)
+        self.solver.Add(exp)
         #self.solver.Add(self.solver.IsEqualCstVar((self.tasks[(1, 0)] == 0) * (self.shifts[(1, 0)] == 0), 1))
         """
         for d in range(self.num_days):

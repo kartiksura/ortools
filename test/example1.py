@@ -30,6 +30,7 @@ def main():
         nurses_for_day = [nurses[(j, day)] for j in range(num_shifts)]
         for j in range(num_nurses):
             s = shifts[(j, day)]
+            print ("s=", s, "j=", j)
             solver.Add(s.IndexOf(nurses_for_day) == j)
 
     # Make assignments different on each day

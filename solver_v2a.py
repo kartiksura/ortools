@@ -217,102 +217,13 @@ class SchedulingSolver:
         self.assigned_worker_flat = [self.assigned_worker[(t, s, d)] for t in range(self.num_tasks)
                                                                      for s in range(self.num_shifts)
                                                                      for d in range(self.num_days)]
-        """
-        for d in range(1):
-            for s in range(1,2):
-                w_day = [self.assigned_worker[(t, s, d, a)] for t in range(self.num_tasks) for a in range(2)]
-                w_day = [self.assigned_worker[(1, 1, 0, 1)]]
-                a = self.assigned[(8,1,1,0)]
-                print (a)
-                self.solver.Add(a.IndexOf(w_day) == 8)
-                print (w_day)
-                #for w in range (self.num_workers):
-                #    for t in range(self.num_tasks):
-                #        base = self.assigned[(w, t, s, d)]
-                #        #self.solver.Add(base.IndexOf(w_day) == w)
-        """
 
-        #self.solver.Add(self.assigned[(8,1,1,0)] == 1) # worker = 8
-        #self.solver.Add(self.assigned[(6,1,1,0)] == 1) # worker = 6
         for t in range(self.num_tasks):
             for s in range(self.num_shifts):
                 for d in range(self.num_days):
                     self.solver.Add(self.assigned_worker[(t, s, d)] == self.solver.Max([w * self.assigned[w, t, s, d] for w in range (self.num_workers)]))
-        """
 
-
-
-
-        # task_worker[(worker, task, day)] = task # All task must be different for a single day and equal for every shift
-        
-        self.task_worker = {}
-
-        for w in range(self.num_workers):
-            for t in range(self.num_tasks):
-                for d in range(self.num_days):
-                    self.task_worker[(w, t, d)] = self.solver.IntVar(0, self.num_tasks - 1, "task_worker(%i,%i,%i)" % (w, t, d))
-        self.tasks_flat_day = []
-        self.tasks_flat_day = [self.task_worker[(w, t, d)] for w in range(self.num_workers)
-                                                        for t in range(self.num_tasks)
-                                                        for d in range(self.num_days)]
-
-        #self.solver.Add(self.task_worker[(1, 1, 0)] == 2)
-
-        for w in range(self.num_workers):
-            for t in range(self.num_tasks):
-                for d in range(self.num_days):
-                    self.solver.Add(self.task_worker[(w, t, d)] == t*self.solver.Max([self.assigned[(w,t,s,d)] for s in range(self.num_shifts)]))
-        """
-        """
-        for d in range(self.num_days):
-            for s in range(1, self.num_shifts):
-                t_day = [self.task[(w, s, d)] for w in range(self.num_workers) ]
-                # w_day = [self.worker[(ta, s, d)] for ta in range(self.num_tasks)]
-                for w in range (self.num_workers):
-                    t = self.task[(w, s, d)]
-                    self.solver.Add(t.IndexOf(t_day) == w)
-        """
-        """
-        for t in range(self.num_tasks):
-            for s in range(self.num_shifts):
-                for d in range(self.num_days):
-                    w = self.worker[(t, s, d)]
-                    self.solver.Add(w.IndexOf(tasks_flat_day) == t)
-        
-        days= 1
-        sh = 2
-        for d in range(days):
-            for s in range(1, sh):
-                print ("BDEGU %i,%i" %(d,s))
-                w_day = [self.worker[(ta, s, d)] for ta in range(self.num_tasks) ]
-                #for w in range (self.num_workers):
-                #    t = self.task[(w, s, d)]
-                #    self.solver.Add(t.IndexOf(w_day) == w)
-                t = self.task[(1, 1, d)]
-                self.solver.Add(t.IndexOf(w_day) == 1)
-                t = self.task[(2, 1, d)]
-                self.solver.Add(t.IndexOf(w_day) == 2)
-                t = self.task[(4, 1, d)]
-                self.solver.Add(t.IndexOf(w_day) == 4)
-                #t = self.task[(4, 1, d)]
-                #self.solver.Add(t.IndexOf(w_day) == 6)
-                #t = self.task[(5, 1, d)]
-                #self.solver.Add(t.IndexOf(w_day) == 5)
-                #t = self.task[(6, 1, d)]
-                #self.solver.Add(t.IndexOf(w_day) == 6)
-                #t = self.task[(7, 1, d)]
-                #self.solver.Add(t.IndexOf(w_day) == 7)
-                #t = self.task[(8, 1, d)]
-                #self.solver.Add(t.IndexOf(w_day) == 8)
-
-        """
-        """
-        self.solver.Add(self.assigned[(1,3,1,0)]==1)
-        self.solver.Add(self.assigned[(2,2,1,0)]==1)
-        self.solver.Add(self.assigned[(3,2,1,0)]==1)
-        """
-        #self.solver.Add(self.workers_task_day[(1,1,0)] == 3)
-                           # Initialize list of broken constraints
+        # Set vars for soft solving
         for i in range(self.C_MAXSOFTCONSTRAINTS):
             self.brkconstraints[i] = self.solver.IntVar(0,1000,"brk %i" % i)
             self.brkconstraints_where[i] = self.solver.IntVar(0, 10000000, "brkw %i" %i)
@@ -338,9 +249,14 @@ class SchedulingSolver:
         # Set the scheduling min requirements for all the days
 
         # All workers for a day must be different except the scape value (0) None to do the task on shift
+
+        #self.solver.Add(self.assigned[(8,1,1,0)] == 1) # worker = 8
+        #self.solver.Add(self.assigned[(6,1,1,0)] == 1) # worker = 6
+        """
         for d in range(self.num_days):
-            temp = [self.assigned_worker[(t, s, d)] for t in range(self.num_tasks)
-                                                    for s in range(self.num_shifts)]
+            for w in range(self.num_workers):
+                self.solver.Add(self.solver.SumEquality([self.assigned[w, t, s, d] for t in range (self.num_tasks) for s in range(self.num_shifts)],1))
+        """
             #self.solver.Add(self.solver.AllDifferentExcept(temp, 0))
             #temp = [self.task[(w, s, d)] for w in range(1, self.num_workers) for s in range(1,self.num_shifts)]
             #self.solver.Add(self.solver.AllDifferentExcept(temp, 0))
@@ -677,12 +593,10 @@ class SchedulingSolver:
             for d in range(self.num_days):
                 for s in range(1, self.num_shifts):
                     n=0
-                    nworkers = ""
                     for w in range(self.num_workers):
                         a = collector.Value(dsoln, self.assigned[w,j,s,d])
                         if (a>0):
                             n += 1
-                            nworkers += self.nameWorkers[w]['Name'][:3]
                     shift_str = shift_str + str(n) + self.space(1)
                 shift_str = shift_str + "|"+ self.space(1)
 

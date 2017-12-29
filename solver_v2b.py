@@ -1,6 +1,6 @@
 from __future__ import print_function
 from ortools.constraint_solver import pywrapcp
-from math import pow
+#from math import pow
 
 class SchedulingSolver:
     """
@@ -20,6 +20,7 @@ class SchedulingSolver:
     num_shifts = 0
     nameTasks = []
     num_tasks = 0
+    allowedtasks = []
     nameWorkers = []
     allWorkers = []
     dayRequirements = []
@@ -128,17 +129,18 @@ class SchedulingSolver:
         #Load the tasks
         self.nameTasks = ['Operario','Supervisor', 'Revisor']
         self.num_tasks = len(self.nameTasks)
+        self.allowedtasks = list(range(self.num_tasks))
 
         #Load all the workers
         self.allWorkers =[{'Name': '---', 'ATasks': [0, 1, 2, 3], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Op1', 'ATasks': [0, 1], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Op2', 'ATasks': [0, 1], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Op3', 'ATasks': [0, 1], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Op4', 'ATasks': [0, 1, 3], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Re1', 'ATasks': [0, 3], 'AShifts': [0, 2, 3]},
-                          {'Name': 'Su1', 'ATasks': [0, 2, 3], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Su2', 'ATasks': [0, 1, 2], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Su3', 'ATasks': [0, 2], 'AShifts': [0, 3]}]
+                          {'Name': 'Op1', 'ATasks': [0], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Op4', 'ATasks': [0, 2], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Re1', 'ATasks': [0, 2], 'AShifts': [0, 2, 3]},
+                          {'Name': 'Su1', 'ATasks': [1], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Su2', 'ATasks': [1], 'AShifts': [0, 1, 2, 3]},
+                          {'Name': 'Su3', 'ATasks': [1, 2], 'AShifts': [0, 3]}]
 
         #Set the workers for the problem
         self.nameWorkers = self.allWorkers
@@ -161,10 +163,10 @@ class SchedulingSolver:
                                 ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
                                 ([2, 1, 0], [1, 1, 0], [0, 0, 1]),
                                 ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
-                                ([2, 1, 1], [1, 1, 0], [0, 0, 1]),
-                                ([2, 1, 1], [1, 1, 0], [0, 0, 1])]
+                                ([3, 1, 1], [1, 1, 0], [0, 0, 1]),
+                                ([2, 1, 1], [1, 1, 0], [0, 1, 1])]
 
-        self.dayRequirements = self.allRequirements[0:1]
+        self.dayRequirements = self.allRequirements[0:7]
         self.num_days = len(self.dayRequirements)
 
 
@@ -255,15 +257,12 @@ class SchedulingSolver:
         """
         # HARD CONSTRAINTS
 
-        # self.addHardWorkersMustBeAssignedToAllowedTasks()
-
-        # Set all the allowed tasks for all the workers as hard constraints
-        #for w in range(self.num_workers):
-        #    self.addHardAllowedTasksForWorker(w, self.nameWorkers[w]['ATasks'])
-
-
         # All workers for a day must be different for to do the task+shift
         self.addHardAllDifferentWorkers_OnDay()
+
+        # Set all the allowed tasks for all the workers as hard constraints
+        for w in range(self.num_workers):
+            self.addHardAllowedTasksForWorker(w,self.nameWorkers[w]['ATasks'])
 
         #self.addHardMinRequired_Task_onDay(2, 0, 2, 0)
         #self.addHardMinRequired_Task_onDay(3, 1, 1, 0)
@@ -318,11 +317,14 @@ class SchedulingSolver:
         :return: void
         """
 
-        if nworkers > 0:
-            print("debug.Assigning %i total workers to day %i " % (nworkers, iday, ))
+        if nworkers > (self.num_workers-1):
+            print ("More workers are required to assign on day %i,required at least %i." %(iday, nworkers))
+            exit(0)
 
-        # set the number os tasks to do on this day
-        self.solver.Add(self.tot_workers_day[iday] == nworkers)
+        if nworkers > 0:
+            #print("debug.Assigning %i total workers to day %i." % (nworkers, iday ))
+            # set the number os tasks to do on this day
+            self.solver.Add(self.tot_workers_day[iday] == nworkers)
 
 
     def addHardMinRequired_Task_onDay(self, nworkers, rtask, rshift, iday):
@@ -337,8 +339,7 @@ class SchedulingSolver:
         :return: void
         """
 
-        if nworkers>0:
-            print ("debug.Assigning %i workers to day %i at task %s and shift %s" %(nworkers, iday, self.nameTasks[rtask], self.nameShifts[rshift]))
+        #print ("debug.Assigning %i workers to day %i at task %s and shift %s" %(nworkers, iday, self.nameTasks[rtask], self.nameShifts[rshift]))
 
         # set the number os tasks to do on this day
         self.solver.Add(self.num_workers_task_day[(rtask, rshift, iday)] == nworkers)
@@ -351,32 +352,29 @@ class SchedulingSolver:
         :param atasks: The tasks array to set
         :return: void
         """
+        if iworker == 0:
+            return
 
-        print ("debug.Setting allowed tasks for worker %s are %s" %(self.nameWorkers[iworker]['Name'], str(atasks)))
-
-        for i in range(self.num_days):
-            exp = [self.task[iworker, i] == atasks[t] for t in range(len(atasks))]
-            self.solver.Add(self.solver.Max(exp) == 1)
-
-
-    def addHardWorkersMustBeAssignedToAllowedTasks(self):
-        """
-        Set the assignments of the workers at those who has allowed taks
-
-        :return:
-        """
+        #print ("debug.Setting allowed tasks for worker %s are %s" %(self.nameWorkers[iworker]['Name'], str(atasks)))
         #Example:
-        #At least 2 M shifts must be set on day 0
-        #exp1 = [self.shifts[(w, 0)] == 1 for w in range(self.num_workers)]
-        #self.solver.Add(self.solver.Sum(exp1) >= 3)
-        #numero de supervisores assignados =1 en turno manana
-        #exp2 = [self.tasks[(w, 0)] == 1 for w in range(self.num_workers)]
-        #self.solver.Add(self.solver.Sum(exp2) == 1)
+        """
+            #not allowed task = [2,3]
+            r=[2,3]
+            for s in r:
+                exp = self.assigned[4,1,s,0] == 0
+                print (exp)
+                self.solver.Add(exp)
+        """
+        # create a list with not allowed tasks
+        _notallowed = self.allowedtasks.copy()
+        for n in atasks:
+            _notallowed.remove(n)
+        #print ("debug. worker %i, not allowed to tasks=%s" %(iworker,str(_notallowed)))
 
-        exp1 = [(self.task[(w, 0)] == 1) * (self.shift[(w, 0)] == 1) for w in range(self.num_workers)]
-        exp2 = [(self.task[(w, 0)] == 2) * (self.shift[(w, 0)] == 1) for w in range(self.num_workers)]
-        self.solver.Add(self.solver.Sum(exp1) >= 4)
-        self.solver.Add(self.solver.Sum(exp2) >= 2)
+        for t in _notallowed:
+            for s in range(self.num_shifts):
+                for d in range(self.num_days):
+                    self.solver.Add(self.assigned[iworker,t,s,d] == 0)
 
 
     def addHardMaxWorkingDays(self, minwdays, maxwdays):
@@ -531,6 +529,7 @@ class SchedulingSolver:
             self.brkconstraints_cost[self.nconstraints] = penalty
             self.nconstraints += 1
 
+
     def ComposeDb(self):
         """
           first_solution = solver.Assignment()
@@ -680,7 +679,8 @@ class SchedulingSolver:
                             for s in range(self.num_shifts):
                                 a = collector.Value(dsoln, self.assigned[w, t, s, d])
                                 if a > 0:
-                                    print("[worker %i, task= %i, shift= %i ,day %i]" % (w, t, s, d))
+                                    print("[worker %i (%s), task= %i (%s), shift= %i (%s) ,day %i]" %
+                                          (w, self.nameWorkers[w]['Name'], t, self.nameTasks[t], s, self.nameShifts[s], d))
                 return (0)
 
 def main():

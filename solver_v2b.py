@@ -42,6 +42,7 @@ class SchedulingSolver:
         self.objective = None
         self.shift = {}
         self.num_workers_task_day= {}
+        self.workers_task_day = {}
         self.assigned_worker = {}
         self.tot_workers_day = {}
         self.assigned ={}
@@ -186,30 +187,7 @@ class SchedulingSolver:
                                                          for t in range(self.num_tasks)
                                                          for s in range(self.num_shifts)
                                                          for d in range(self.num_days)]
-        """
-        # Set the assigned[w,t,s,d] values from assigner_worker[]
-        # Assigned worker to day 0 means not working
-        for w in range(self.num_workers):
-            for t in range(self.num_tasks):
-                for s in range(self.num_shifts):
-                    for d in range(self.num_days):
-                        self.solver.Add(self.assigned[(w, t, s, d)] == 1*self.solver.IsEqualCstVar(self.assigned_worker[(w, t, s)], d))
 
-        
-        
-        # assigned_worker[w,t,s] = d  (to a day) Assigned worker to day 0 means not working
-        self.assigned_worker = {}
-        self.assigned_worker_flat = []
-
-        for w in range(self.num_workers):
-            for t in range(self.num_tasks):
-                for s in range(self.num_shifts):
-                    self.assigned_worker[(w, t, s)] = self.solver.IntVar(0, self.num_days -1, "assigned_worker(%i,%i,%i)" % (w, t, s))
-
-        self.assigned_worker_flat = [self.assigned_worker[(w, t, s)] for w in range(self.num_workers)
-                                                                     for t in range(self.num_tasks)
-                                                                     for s in range(self.num_shifts)]
-        """
         #--COMPLEMENTARI ---------------------------------------------------------------------------------------------
 
         # num_workers_task_day[(task, shift, day)] = num workers
@@ -234,22 +212,11 @@ class SchedulingSolver:
         for d in range(self.num_days):
             self.tot_workers_day[d] = self.solver.IntVar(0, self.C_MAXWORKERSTASKDAY, "totalworkersday(%i)" % d)
 
-
-        # set workers_task_day from assignments
         for d in range(self.num_days):
             a = self.tot_workers_day[d]
             self.solver.Add(self.solver.SumEquality([self.assigned[(w, t, s, d)] == 1 for w in range(1, self.num_workers)
                                                                                       for t in range(self.num_tasks)
                                                                                       for s in range(self.num_shifts)], a))
-        #Only for debug...
-        """
-        self.num_workers_task_day_flat = []
-        self.num_workers_task_day_flat = [self.num_workers_task_day[(t, s, d)] for t in range(self.num_tasks)
-                                          for s in range(self.num_shifts)
-                                          for d in range(self.num_days)]
-        """
-        # Set relationships between tasks shifts and days vs assigned workers.
-        #--------------------------------------------------------------------------------------------------------------
 
         # workers_task_day[(worker, task, shift, day)] = worker
         self.workers_task_day = {}
@@ -271,20 +238,8 @@ class SchedulingSolver:
                                                                      for t in range(self.num_tasks)
                                                                      for s in range(self.num_shifts)
                                                                      for d in range(self.num_days)]
-        """
-        for d in range(self.num_days):
-            for s in range(1, self.num_shifts):
-                t_day = [self.task[(w, s, d)] for w in range(self.num_workers) ]
-                # w_day = [self.worker[(ta, s, d)] for ta in range(self.num_tasks)]
-                for w in range (self.num_workers):
-                    t = self.task[(w, s, d)]
-                    self.solver.Add(t.IndexOf(t_day) == w)
-        """
-        #Only for debug...
-        #self.workers_task_day_flat = []
 
-
-
+        # -----------------------------------------------------------------------------------------------------------
         # Set vars for soft solving
         for i in range(self.C_MAXSOFTCONSTRAINTS):
             self.brkconstraints[i] = self.solver.IntVar(0,1000,"brk %i" % i)

@@ -21,6 +21,7 @@ class SchedulingSolver:
     nameTasks = []
     num_tasks = 0
     allowedtasks = []
+    allowedshifts= []
     nameWorkers = []
     allWorkers = []
     dayRequirements = []
@@ -125,6 +126,7 @@ class SchedulingSolver:
         #Load the shifts
         self.nameShifts = ['MAN', 'TAR', 'NOC']
         self.num_shifts = len(self.nameShifts)
+        self.allowedshifts = list(range(self.num_shifts))
 
         #Load the tasks
         self.nameTasks = ['Operario','Supervisor', 'Revisor']
@@ -132,15 +134,15 @@ class SchedulingSolver:
         self.allowedtasks = list(range(self.num_tasks))
 
         #Load all the workers
-        self.allWorkers =[{'Name': '---', 'ATasks': [0, 1, 2, 3], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Op1', 'ATasks': [0], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Op4', 'ATasks': [0, 2], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Re1', 'ATasks': [0, 2], 'AShifts': [0, 2, 3]},
-                          {'Name': 'Su1', 'ATasks': [1], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Su2', 'ATasks': [1], 'AShifts': [0, 1, 2, 3]},
-                          {'Name': 'Su3', 'ATasks': [1, 2], 'AShifts': [0, 3]}]
+        self.allWorkers =[{'Name': '---', 'ATasks': [0, 1, 2, 3], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Op1', 'ATasks': [0], 'AShifts': [0, 1]},
+                          {'Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1]},
+                          {'Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Op4', 'ATasks': [0, 2], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Re1', 'ATasks': [0, 2], 'AShifts': [0, 2]},
+                          {'Name': 'Su1', 'ATasks': [1], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Su2', 'ATasks': [1], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Su3', 'ATasks': [1, 2], 'AShifts': [0, 2]}]
 
         #Set the workers for the problem
         self.nameWorkers = self.allWorkers
@@ -279,6 +281,7 @@ class SchedulingSolver:
 
         #self.addHardMaxWorkingDays(5, 6)
 
+
     def addHardAllDifferentWorkers_OnDay(self):
         """
         Constraint to ensure that a task+shift is assigned to a different worker for a Day
@@ -371,6 +374,9 @@ class SchedulingSolver:
             _notallowed.remove(n)
         #print ("debug. worker %i, not allowed to tasks=%s" %(iworker,str(_notallowed)))
 
+        if len(_notallowed) == 0:
+            return 0
+
         for t in _notallowed:
             for s in range(self.num_shifts):
                 for d in range(self.num_days):
@@ -412,11 +418,10 @@ class SchedulingSolver:
         #self.addSoft_AfterAShiftForworkerNextShift_NotEqualTo(1, 1, 0, 80)
 
         #Load soft constraints for the allowed Shifts of the workers
-        """
-        for w in range(self.num_workers):
+        for w in range(1, self.num_workers):
             print ("debug.Setting the shift for %s to %s" %(self.nameWorkers[w]['Name'],self.nameWorkers[w]['AShifts']))
             self.addSoft_AllowedShiftsToWorker(w, self.nameWorkers[w]['AShifts'], 40 )
-        """
+
         #------
         #the last constraint is to calculate the final cost
         self.calculateSoftCost()
@@ -468,10 +473,20 @@ class SchedulingSolver:
         thisSoftConstraint = 2  # internal index code constraint on the solver, must be > 0
         num_ashifts = len(ashift)
 
+        # create a list with not allowed tasks
+        _notallowed = self.allowedshifts.copy()
+        for n in ashift:
+            _notallowed.remove(n)
+
+        if len(_notallowed) == 0:
+            return 0
+
         for i in range(self.num_days):
-            temp = [self.shift[iworker, i] == ashift[s] for s in range(num_ashifts)]
+            temp = [self.assigned[iworker, t, _notallowed[s], i] == 1 for s in range(len(_notallowed))
+                                                                      for t in range(self.num_tasks)]
+            #temp = [self.shift[iworker, i] == ashift[s] for s in range(num_ashifts)]
             #print ("Debug.Day %i Debug.temp=%s " % (i,temp))
-            self.solver.Add(self.brkconstraints[self.nconstraints] == 1 * (self.solver.Max(temp) == 0))
+            self.solver.Add(self.brkconstraints[self.nconstraints] == 1 * (self.solver.Max(temp) == 1))
             self.solver.Add(self.brkconstraints_where[self.nconstraints] == self.brkconstraints[self.nconstraints] *
                         self._brkWhereSet(iworker, i, thisSoftConstraint))
             self.brkconstraints_cost[self.nconstraints] = penalty
@@ -659,7 +674,7 @@ class SchedulingSolver:
 
             if cons == 1:
                 cons_count = cons_count +1
-                print ("#%i breaked %s with cost %i" % (n+1, self._brkWhereGet(where),
+                print ("%i. Breaked %s with cost %i" % (cons_count, self._brkWhereGet(where),
                         self.brkconstraints_cost[n]) )
         if self.nconstraints == 0:
             perc=0

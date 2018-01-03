@@ -1,6 +1,5 @@
 from __future__ import print_function
 from ortools.constraint_solver import pywrapcp
-#from math import pow
 
 class SchedulingSolver:
     """
@@ -31,9 +30,9 @@ class SchedulingSolver:
     nconstraints = 0  #used to count the number of Soft constraints add to the system
 
     C_MAXWORKERSTASKDAY = 99    # max number of scheduled workers for a single task in a day
-    C_MAXSOFTCONSTRAINTS = 100  # max number of soft constraints reserved space (can be updated)
+    C_MAXSOFTCONSTRAINTS = 200  # max number of soft constraints reserved space (can be updated)
     C_IMPLEMENTEDSOFTCONSTRAINTS = 10 # number of implemented SOFT constraints on this solver version class
-    C_TIMELIMIT = 10000 # time limit for the solver in ms
+    C_TIMELIMIT = 120000 # time limit for the solver in ms
 
 
     def __init__(self):
@@ -54,7 +53,7 @@ class SchedulingSolver:
         self.works_shift = []
         self.workers_flat = []
         self.assignations = []
-        self.cost = self.solver.IntVar(0, 1000, "cost")
+        self.cost = self.solver.IntVar(0, 5000, "cost")
 
         self.brkconstraints = {}
         self.brkconstraints_cost = []
@@ -85,7 +84,7 @@ class SchedulingSolver:
         code = int(str(code)[-5:])
         _fil = code/self.num_days
         _col = (code % self.num_days)
-        _str = "SoftConstraint %i in (%i,%i)" % (_con, _fil, _col)
+        _str = "SoftConstraint %i with worker %i (%s) in day %i," % (_con, _fil,self.nameWorkers[int(_fil)]['Name'], _col)
         return str(_str)
 
 
@@ -139,6 +138,7 @@ class SchedulingSolver:
                           {'Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1]},
                           {'Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2]},
                           {'Name': 'Op4', 'ATasks': [0, 2], 'AShifts': [0, 1, 2]},
+                          {'Name': 'Op5', 'ATasks': [0], 'AShifts': [0, 1]},
                           {'Name': 'Re1', 'ATasks': [0, 2], 'AShifts': [0, 2]},
                           {'Name': 'Su1', 'ATasks': [1], 'AShifts': [0, 1, 2]},
                           {'Name': 'Su2', 'ATasks': [1], 'AShifts': [0, 1, 2]},
@@ -243,12 +243,26 @@ class SchedulingSolver:
                                                                      for s in range(self.num_shifts)
                                                                      for d in range(self.num_days)]
 
+        # isworkingday[(worker,day)] = 1/0  is or is not a working day for this worker
+        self.isworkingday = {}
+
+        for w in range(self.num_workers):  #worker 0 is reserved for a Non Assigned worker
+            for d in range(self.num_days):
+                self.isworkingday[(w, d)] = self.solver.IntVar(0, 1, "isworkingday(%i,%i)" % (w, d))
+
+        for w in range(self.num_workers):
+            for d in range(self.num_days):
+                a = self.isworkingday[(w, d)]
+                self.solver.Add(a == self.solver.Max([self.assigned[(w,t,s,d)] for t in range(self.num_tasks) for s in range(self.num_shifts)]))
+
         # -----------------------------------------------------------------------------------------------------------
         # Set vars for soft solving
         for i in range(self.C_MAXSOFTCONSTRAINTS):
             self.brkconstraints[i] = self.solver.IntVar(0,1000,"brk %i" % i)
             self.brkconstraints_where[i] = self.solver.IntVar(0, 10000000, "brkw %i" %i)
             self.brkconstraints_cost.append(0)
+
+        self.mShowWorkers = []
 
 
     def hardConstraints(self):
@@ -258,7 +272,7 @@ class SchedulingSolver:
         :return: void
         """
         # HARD CONSTRAINTS
-
+        print ("Implementing hard constraints...")
         # All workers for a day must be different for to do the task+shift
         self.addHardAllDifferentWorkers_OnDay()
 
@@ -279,7 +293,7 @@ class SchedulingSolver:
         # Set the scheduling number of working days from the requirement
         # Each worker works 5 or 6 days in a week.
 
-        #self.addHardMaxWorkingDays(5, 6)
+        #self.addHard_MaxConsecutiveWorkingDays(5)
 
 
     def addHardAllDifferentWorkers_OnDay(self):
@@ -383,19 +397,22 @@ class SchedulingSolver:
                     self.solver.Add(self.assigned[iworker,t,s,d] == 0)
 
 
-    def addHardMaxWorkingDays(self, minwdays, maxwdays):
+    def addHard_MaxConsecutiveWorkingDays(self, maxwdays):
         """
-        Set the min and max working days for the problem on a hard constraint (only search for feasible solutions)
+        Set the max working days for the problem on a hard constraint (only search for feasible solutions)
 
-        :param minwdays:
         :param maxwdays:
         :return:
         """
-        # Each worker works between min and max days in a week.
-        #   tip: shift[(j,i)] = 0 is a not working shift
-        for j in range(self.num_workers):
-            self.solver.Add(self.solver.Sum([self.shift[(j, i)] > 0 for i in range(self.num_days)]) >= minwdays)
-            self.solver.Add(self.solver.Sum([self.shift[(j, i)] > 0 for i in range(self.num_days)]) <= maxwdays)
+        # Each worker works max consecutive days
+        #for w in range(1, self.num_workers):
+        #print (" days=" + str(self.num_days))
+        for w in range(1, self.num_workers):
+            print ("debug.Hard: Assigning %i max consecutive working days for worker %i" %(maxwdays,w))
+            for dini in range(self.num_days - maxwdays +1):
+                if (dini+maxwdays) < self.num_days:
+                    r = [self.isworkingday[(w, dini + d)] for d in range(maxwdays+1)]
+                    self.solver.Add(self.solver.Sum(r) <= maxwdays)
 
 
     def softConstraints(self):
@@ -405,6 +422,8 @@ class SchedulingSolver:
 
         :return: void
         """
+
+        print ("Implementing soft constraints...")
         #SOFT CONSTRAINTS EXAMPLE
         # worker = 1 penalize 30 cost if work on day = 0
         #   shifts[(1, 0)] != 0  (worker 1 on day 0) !=0 (working, 0 mean working)
@@ -419,10 +438,16 @@ class SchedulingSolver:
 
         #Load soft constraints for the allowed Shifts of the workers
         for w in range(1, self.num_workers):
-            print ("debug.Setting the shift for %s to %s" %(self.nameWorkers[w]['Name'],self.nameWorkers[w]['AShifts']))
+            #print ("debug.Soft: Setting the shift for %s to %s" %(self.nameWorkers[w]['Name'],self.nameWorkers[w]['AShifts']))
             self.addSoft_AllowedShiftsToWorker(w, self.nameWorkers[w]['AShifts'], 40 )
 
         #------
+        # Add max consecutive working days constraint
+        self.addSoft_MaxConsecutiveWorkingDays(5, 200)
+
+        # Add min consecutive non-working days inside a time lapse
+        self.addSoft_MinConsecutiveNonWorkingDays(2, 7, 95)
+
         #the last constraint is to calculate the final cost
         self.calculateSoftCost()
 
@@ -545,6 +570,62 @@ class SchedulingSolver:
             self.nconstraints += 1
 
 
+    def addSoft_MaxConsecutiveWorkingDays(self, maxwdays, penalty):
+        """
+        Set the max consecutive working days for the problem on a soft constraint (only search for feasible solutions)
+
+        :param maxwdays:
+        :return:
+        """
+
+        thisSoftConstraint = 5  # internal index code constraint on the solver, must be > 0
+
+        for w in range(1, self.num_workers):
+            #print("debug.Soft: Assigning %i max consecutive working days for worker %i" % (maxwdays, w))
+            for dini in range(self.num_days - maxwdays + 1):
+                if (dini + maxwdays) < self.num_days:
+                    temp = [self.isworkingday[(w, dini + d)] for d in range(maxwdays + 1)]
+
+                    self.solver.Add(self.brkconstraints[self.nconstraints] == 1 * (self.solver.Sum(temp) > maxwdays))
+                    self.solver.Add(self.brkconstraints_where[self.nconstraints] == self.brkconstraints[self.nconstraints] *
+                                    self._brkWhereSet(w, dini, thisSoftConstraint))
+                    self.brkconstraints_cost[self.nconstraints] = penalty
+                    self.nconstraints += 1
+
+
+    def addSoft_MinConsecutiveNonWorkingDays(self, minnwdays, lapse_days, penalty):
+        """
+        Set the min non-working consecutive days for the problem on a soft constraint (only search for feasible solutions)
+
+        :param minnwdays: min non-working days that have to be assigned consecutively
+        :param lapse_days: number of days for the time lapse to compute
+        :return:
+        """
+
+
+        thisSoftConstraint = 6  # internal index code constraint on the solver, must be > 0
+
+        if lapse_days < 2:
+            print ("Day time lapse too short!, can't add soft constraint")
+
+        lapse_days= lapse_days -1
+
+        if lapse_days > self.num_days:
+            lapse_days = self.num_days
+
+        for w in range(1, self.num_workers):
+            #print("debug.Soft: Assigning %i min consecutive non working days for worker %i for every %i days scheduled" %(minnwdays, w, lapse_days+1))
+            for dini in range(self.num_days - lapse_days + 1):
+                if (dini + lapse_days) < self.num_days:
+                    temp = [self.isworkingday[(w, dini + d)] == 0 for d in range(lapse_days + 1)]
+
+                    self.solver.Add(self.brkconstraints[self.nconstraints] == 1 * (self.solver.Sum(temp) < minnwdays))
+                    self.solver.Add(self.brkconstraints_where[self.nconstraints] == self.brkconstraints[self.nconstraints] *
+                                    self._brkWhereSet(w, dini, thisSoftConstraint))
+                    self.brkconstraints_cost[self.nconstraints] = penalty
+                    self.nconstraints += 1
+
+
     def ComposeDb(self):
         """
           first_solution = solver.Assignment()
@@ -576,7 +657,7 @@ class SchedulingSolver:
         """
 
         # Create a solution collector.
-
+        print ("Searching solutions for max %i seconds..." %(self.C_TIMELIMIT/1000))
         collector = self.solver.LastSolutionCollector()
         collector.Add(self.assignations)
         collector.Add(self.workers_task_day_flat)
@@ -605,6 +686,7 @@ class SchedulingSolver:
 
         if found > 0:
             best_solution = collector.SolutionCount() - 1
+            self.showSolutionWorkersToScreen(dsol, collector.ObjectiveValue(best_solution), collector)
             self.showSolutionToScreen(dsol, collector.ObjectiveValue(best_solution), collector)
         else:
             print ("No solutions found on time limit ", (self.C_TIMELIMIT / 1000), " sec, try to revise hard constraints.")
@@ -622,7 +704,8 @@ class SchedulingSolver:
         """
         day_str = " "
         shf_str = ""
-        barra = "____________"
+        linea = "_______________"
+        barra = ""
         print("Solution number ", str(dsoln), "Cost=", str(dcost), '\n')
 
         for i in range(self.num_days):
@@ -630,7 +713,7 @@ class SchedulingSolver:
             for s in range(self.num_shifts):
                 shf_str = shf_str + self.nameShifts[s][:3] + " "
             shf_str = shf_str + "| "
-            barra += barra
+            barra += linea
         print("             ", day_str)
         print("          ", shf_str)
         print(barra)
@@ -682,7 +765,7 @@ class SchedulingSolver:
             perc = 100*cons_count/self.nconstraints
         print("Breaked soft constraints: %i of %i inserted constraints (%.1f%%)\n" %
               (cons_count, self.nconstraints, perc))
-
+        """
         while(True):
             r = input("Do you want to show workers for task on day? (Y/N)")
             if r.capitalize() == 'N' or r=="" :
@@ -696,7 +779,98 @@ class SchedulingSolver:
                                 if a > 0:
                                     print("[worker %i (%s), task= %i (%s), shift= %i (%s) ,day %i]" %
                                           (w, self.nameWorkers[w]['Name'], t, self.nameTasks[t], s, self.nameShifts[s], d))
+                # ---debug max consecutive days worker for worker
+                c = 0
+                w = 1
+                m = 0
+                ld = -1
+                for d in range(self.num_days):
+                    for t in range(self.num_tasks):
+                        for s in range(self.num_shifts):
+                            a = collector.Value(dsoln, self.assigned[w, t, s, d])
+                            if a > 0 and ld != d:
+                                c += 1
+                                ld = d
+                                if c > m:
+                                    m = c
+                            if a == 0 and ld != d:
+                                c = 0
+                print ("Worker %i, has %i consecutive days" %(w,m))
+
                 return (0)
+        """
+
+
+    def showSolutionWorkersToScreen(self, dsoln, dcost,collector=None):
+        """
+
+        Show the workers scheduling setup
+
+        :return: void
+        """
+
+        day_str = " "
+        shf_str = ""
+        linea = "________________"
+        barra = ""
+        print("Solution number ", str(dsoln), "Cost=", str(dcost), '\n')
+
+        for i in range(self.num_days):
+            day_str = day_str + "Day" + str(i) + "    |     "
+            for s in range(self.num_shifts):
+                shf_str = shf_str + self.nameShifts[s][:3] + " "
+            shf_str = shf_str + "| "
+            barra += linea
+        print("             ", day_str)
+        print("          ", shf_str)
+        print(barra)
+
+        for j in range(self.num_tasks):
+            mt = 0
+            for d in range(self.num_days):
+                for s in range(self.num_shifts):
+                    n = 0
+                    for w in range(1, self.num_workers):
+                        a = collector.Value(dsoln, self.assigned[w, j, s, d])
+                        if (a > 0):
+                            # print ("assigned [%i,%i,%i,%i]" %(w,j,s,d))
+                            n += 1
+                            mt = max(mt,n)
+            # then now we know the max number of task to create (mt)
+            for m in range(1, mt+1):
+                shift_str = self.nameTasks[j][:7] + "[" + str(m) + "] "
+                for d in range(self.num_days):
+                    for s in range(self.num_shifts):
+                        strw= self._findWorker(m,d,s,j, dsoln,collector)
+                        shift_str += strw+ self.space(1)
+                    shift_str += "|" + self.space(1)
+                print(shift_str)
+
+
+    def _findWorker(self, num, d, s, t, dsoln, collector=None):
+        """
+        Find num (firths, second,.. ) from the day, shift, and task assigned to work
+
+        :param num:
+        :param d:
+        :param s:
+        :param t:
+        :param dsoln:
+        :param collector:
+        :return:
+        """
+        encontrado = False
+        strw = "---"
+        n = 0
+        for w in range(1, self.num_workers):
+            a = collector.Value(dsoln, self.assigned[w, t, s, d])
+            if (a > 0):
+                encontrado = True
+                n += 1
+                if n == num:
+                    strw = self.nameWorkers[w]['Name']
+                    break
+        return strw
 
 def main():
 

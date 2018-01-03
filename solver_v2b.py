@@ -590,7 +590,7 @@ class SchedulingSolver:
 
         # Add the objective and solve
 
-        self.objective = self.solver.Minimize(self.cost, 1)
+        self.objective = self.solver.Maximize(self.cost, 1)
         collector.AddObjective(self.cost)
 
         #solution_limit = self.solver.SolutionsLimit(1000)

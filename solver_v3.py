@@ -1,5 +1,15 @@
 from __future__ import print_function
 from ortools.constraint_solver import pywrapcp
+from enum import Enum
+
+class ChooseTypeDb(Enum):
+    CHOOSE_RANDOM = 2
+    CHOOSE_FIRST_UNBOUND = 2
+    CHOOSE_MIN_SIZE_HIGHEST_MAX = 7
+    CHOOSE_MIN_SIZE_HIGHEST_MIN = 5
+    CHOOSE_MIN_SIZE_LOWEST_MAX = 6
+    CHOOSE_MIN_SIZE_LOWEST_MIN = 4
+
 
 class SchedulingSolver:
     """
@@ -462,8 +472,8 @@ class SchedulingSolver:
         # Add max consecutive working days constraint
         self.addSoft_MaxConsecutiveWorkingDays(5, 200)
 
-        # Add min consecutive non-working days inside a time lapse
-        self.addSoft_MinConsecutiveNonWorkingDays(2, 7, 95)
+        # Add min non-working days inside a time lapse
+        self.addSoft_MinNonWorkingDays(2, 7, 95)
 
         #the last constraint is to calculate the final cost
         self.calculateSoftCost()
@@ -610,9 +620,9 @@ class SchedulingSolver:
                     self.nconstraints += 1
 
 
-    def addSoft_MinConsecutiveNonWorkingDays(self, minnwdays, lapse_days, penalty):
+    def addSoft_MinNonWorkingDays(self, minnwdays, lapse_days, penalty):
         """
-        Set the min non-working consecutive days for the problem on a soft constraint (only search for feasible solutions)
+        Set the min non-working days for the scheduler on a soft constraint (only search for feasible solutions)
 
         :param minnwdays: min non-working days that have to be assigned consecutively
         :param lapse_days: number of days for the time lapse to compute
@@ -635,7 +645,7 @@ class SchedulingSolver:
             for dini in range(self.num_days - lapse_days + 1):
                 if (dini + lapse_days) < self.num_days:
                     temp = [self.isworkingday[(w, dini + d)] == 0 for d in range(lapse_days + 1)]
-                    if w==7: print (str(temp))
+
                     self.solver.Add(self.brkconstraints[self.nconstraints] == 1 * (self.solver.Sum(temp) < minnwdays))
                     self.solver.Add(self.brkconstraints_where[self.nconstraints] == self.brkconstraints[self.nconstraints] *
                                     self._brkWhereSet(w, dini, thisSoftConstraint))
@@ -905,15 +915,15 @@ def main():
 
     cost =0
 
+
     mysched = SchedulingSolver()
-    choose_types = mysched._loadDbChooseTypes()
-    #print ("loaded types %s" %str(choose_types))
+    choose_types = ChooseTypeDb
 
     mysched.loadData()
     mysched.definedModel()
     mysched.hardConstraints()
     mysched.softConstraints()
-    mysched.createDecisionBuilderPhase(choose_types[5])
+    mysched.createDecisionBuilderPhase(choose_types.CHOOSE_MIN_SIZE_LOWEST_MIN.value)
     cost=mysched.searchSolutionsCollector(0)
 
     exit(0)

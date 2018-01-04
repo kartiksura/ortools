@@ -32,7 +32,7 @@ class SchedulingSolver:
     C_MAXWORKERSTASKDAY = 99    # max number of scheduled workers for a single task in a day
     C_MAXSOFTCONSTRAINTS = 200  # max number of soft constraints reserved space (can be updated)
     C_IMPLEMENTEDSOFTCONSTRAINTS = 10 # number of implemented SOFT constraints on this solver version class
-    C_TIMELIMIT = 120000 # time limit for the solver in ms
+    C_TIMELIMIT = 10000 # time limit for the solver in ms
 
 
     def __init__(self):
@@ -639,17 +639,17 @@ class SchedulingSolver:
         """
 
 
-    def createDecisionBuilderPhase(self):
+    def createDecisionBuilderPhase(self, choose_type=solver.CHOOSE_RANDOM):
 
         # Create the decision builder.
         #vars = self.tasks_flat + self.shifts_flat
         variables = self.assignations
-        self.db = self.solver.Phase(variables, self.solver.ASSIGN_MIN_VALUE, self.solver.CHOOSE_RANDOM)
+        self.db = self.solver.Phase(variables, self.solver.ASSIGN_MIN_VALUE, choose_type)
 
         #TODO : Create composed db for both assignment problems shefts and tasks
 
 
-    def searchSolutionsCollector(self, dsol):
+    def searchSolutionsCollector(self, dsol, toScreen=True):
         """
         Search solutions using collector
 
@@ -680,6 +680,11 @@ class SchedulingSolver:
         self.solver.Solve(self.db, [self.objective, self.time_limit, collector] )
 
         found = collector.SolutionCount()
+        cost = collector.ObjectiveValue(0)
+
+        if toScreen==False:
+            return cost;
+
         print("Solutions found:", found)
         print("Time:", self.solver.WallTime(), "ms")
         print()
@@ -690,6 +695,8 @@ class SchedulingSolver:
             self.showSolutionToScreen(dsol, collector.ObjectiveValue(best_solution), collector)
         else:
             print ("No solutions found on time limit ", (self.C_TIMELIMIT / 1000), " sec, try to revise hard constraints.")
+
+        return cost
 
 
     def showSolutionToScreen(self, dsoln, dcost,collector=None):

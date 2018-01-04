@@ -116,6 +116,23 @@ class SchedulingSolver:
         return self.solver.IsEqualCstVar((varexp1 * varexp2), 1)
 
 
+    def _loadDbChooseTypes(self):
+        """
+        Load the CHOOSE types for the decision builder
+
+        :return:
+        """
+        types = []
+        types.append(self.solver.CHOOSE_RANDOM)
+        types.append(self.solver.CHOOSE_FIRST_UNBOUND)
+        types.append(self.solver.CHOOSE_MIN_SIZE_HIGHEST_MAX)
+        types.append(self.solver.CHOOSE_MIN_SIZE_HIGHEST_MIN)
+        types.append(self.solver.CHOOSE_MIN_SIZE_LOWEST_MAX)
+        types.append(self.solver.CHOOSE_MIN_SIZE_LOWEST_MIN)
+
+        return types
+
+
     def loadData(self):
         """
         Load the data to the solver
@@ -408,7 +425,7 @@ class SchedulingSolver:
         #for w in range(1, self.num_workers):
         #print (" days=" + str(self.num_days))
         for w in range(1, self.num_workers):
-            print ("debug.Hard: Assigning %i max consecutive working days for worker %i" %(maxwdays,w))
+            #print ("debug.Hard: Assigning %i max consecutive working days for worker %i" %(maxwdays,w))
             for dini in range(self.num_days - maxwdays +1):
                 if (dini+maxwdays) < self.num_days:
                     r = [self.isworkingday[(w, dini + d)] for d in range(maxwdays+1)]
@@ -618,7 +635,7 @@ class SchedulingSolver:
             for dini in range(self.num_days - lapse_days + 1):
                 if (dini + lapse_days) < self.num_days:
                     temp = [self.isworkingday[(w, dini + d)] == 0 for d in range(lapse_days + 1)]
-
+                    if w==7: print (str(temp))
                     self.solver.Add(self.brkconstraints[self.nconstraints] == 1 * (self.solver.Sum(temp) < minnwdays))
                     self.solver.Add(self.brkconstraints_where[self.nconstraints] == self.brkconstraints[self.nconstraints] *
                                     self._brkWhereSet(w, dini, thisSoftConstraint))
@@ -646,6 +663,7 @@ class SchedulingSolver:
         variables = self.assignations
         self.db = self.solver.Phase(variables, self.solver.ASSIGN_MIN_VALUE, choose_type)
 
+
         #TODO : Create composed db for both assignment problems shefts and tasks
 
 
@@ -657,7 +675,8 @@ class SchedulingSolver:
         """
 
         # Create a solution collector.
-        print ("Searching solutions for max %i seconds..." %(self.C_TIMELIMIT/1000))
+        if toScreen: print ("Searching solutions for max %i seconds..." %(self.C_TIMELIMIT/1000))
+
         collector = self.solver.LastSolutionCollector()
         collector.Add(self.assignations)
         collector.Add(self.workers_task_day_flat)
@@ -680,7 +699,10 @@ class SchedulingSolver:
         self.solver.Solve(self.db, [self.objective, self.time_limit, collector] )
 
         found = collector.SolutionCount()
-        cost = collector.ObjectiveValue(0)
+        if found >0:
+            cost = collector.ObjectiveValue(0)
+        else:
+            cost = -1
 
         if toScreen==False:
             return cost;
@@ -881,14 +903,18 @@ class SchedulingSolver:
 
 def main():
 
+    cost =0
+
     mysched = SchedulingSolver()
+    choose_types = mysched._loadDbChooseTypes()
+    #print ("loaded types %s" %str(choose_types))
 
     mysched.loadData()
     mysched.definedModel()
     mysched.hardConstraints()
     mysched.softConstraints()
-    mysched.createDecisionBuilderPhase()
-    mysched.searchSolutionsCollector(0)
+    mysched.createDecisionBuilderPhase(choose_types[5])
+    cost=mysched.searchSolutionsCollector(0)
 
     exit(0)
 

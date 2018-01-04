@@ -20,13 +20,19 @@ from ortools.constraint_solver import model_pb2
 from ortools.constraint_solver import pywrapcp
 
 
+class SolverTest(pywrapcp.Solver):
+
+  def NextSolution(self):
+    print ("Next Solution")
+
+
 class SearchMonitorTest(pywrapcp.SearchMonitor):
 
   def __init__(self, solver, var1, var2):
     pywrapcp.SearchMonitor.__init__(self, solver)
     self._var1 = var1
     self._var2 = var2
-    print ("_s = " + str(self._var2))
+    print ("y = " + str(self._var2))
     #self._solver = solver
 
   def BeginInitialPropagation(self):
@@ -44,27 +50,28 @@ class SearchMonitorTest(pywrapcp.SearchMonitor):
   def BeginNextDecision(self, b):
     print ("Begin next decision: " + str(b))
 
+
 def test_search_monitor():
   print( '-->test_search_monitor')
   solver = pywrapcp.Solver('test search_monitor')
   x = solver.IntVar(1, 10, 'x')
-  y = solver.IntVar(1,4, 'y')
-  ct = (y == 2*x)
+  y = solver.IntVar(1,8, 'y')
+  ct = (y == 3*x)
   solver.Add(ct)
   db = solver.Phase([x], solver.CHOOSE_FIRST_UNBOUND, solver.ASSIGN_MIN_VALUE)
   monitor = SearchMonitorTest(solver, x, y)
   solver.Solve(db, monitor)
 
   solver.NewSearch(db)
+  print(' 2 * x == y')
   while solver.NextSolution():
     print( ' 2 * %i == %i' % (x.Value(), y.Value()))
   solver.EndSearch()
+
+
 def main():
 
-
   test_search_monitor()
-
-
 
 if __name__ == '__main__':
   main()

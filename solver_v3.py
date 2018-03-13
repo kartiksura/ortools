@@ -285,7 +285,7 @@ class SchedulingSolver:
         # -----------------------------------------------------------------------------------------------------------
         # Set vars for soft solving
         for i in range(self.C_MAXSOFTCONSTRAINTS):
-            self.brkconstraints[i] = self.solver.IntVar(0,1000,"brk %i" % i)
+            self.brkconstraints[i] = self.solver.IntVar(0,1,"brk %i" % i)
             self.brkconstraints_where[i] = self.solver.IntVar(0, 10000000, "brkw %i" %i)
             self.brkconstraints_cost.append(0)
 
@@ -330,7 +330,7 @@ class SchedulingSolver:
         :return: void
         """
         # All workers for a day must be different except the scape value (0) *None* to do the task on shift
-
+        print ("Setup HARD: All workers for a day must be different.")
         for d in range(self.num_days):
             temp = [self.workers_task_day[(w, t, s, d)] for w in range(1,self.num_workers) for t in range(self.num_tasks) for s in range(self.num_shifts)]
             self.solver.Add(self.solver.AllDifferentExcept(temp,0))
@@ -413,7 +413,11 @@ class SchedulingSolver:
         _notallowed = self.allowedtasks.copy()
         for n in atasks:
             _notallowed.remove(n)
-        #print ("debug. worker %i, not allowed to tasks=%s" %(iworker,str(_notallowed)))
+
+        strNotAllowedNames = []
+        for i in _notallowed:
+            strNotAllowedNames.append(str(self.nameTasks[i]))
+        print ("Setup HARD: Worker %i, not allowed to tasks=%s" %(iworker,strNotAllowedNames))
 
         if len(_notallowed) == 0:
             return 0
@@ -475,11 +479,11 @@ class SchedulingSolver:
         # Add min non-working days inside a time lapse
         self.addSoft_MinNonWorkingDays(2, 7, 95)
 
-        #the last constraint is to calculate the final cost
-        self.calculateSoftCost()
+        #the last constraint is to calculate the final cost  //extern now
+        #self.calculateCost()
 
 
-    def calculateSoftCost(self):
+    def calculateCost(self):
         """
         Calculate the total cost of the broken constraints
 
@@ -922,7 +926,8 @@ def main():
     mysched.loadData()
     mysched.definedModel()
     mysched.hardConstraints()
-    mysched.softConstraints()
+    # mysched.softConstraints()
+    mysched.calculateCost()
     mysched.createDecisionBuilderPhase(choose_types.CHOOSE_MIN_SIZE_LOWEST_MIN.value)
     cost=mysched.searchSolutionsCollector(0)
 

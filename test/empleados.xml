@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<empleados>
+<empleado category="COOKING">
+  <nombre>---</nombre>
+  <id>001</id>
+  <tasks>0</tasks>
+    <task>0</task>
+    <tasks>0</tasks>
+  <price>30.00</price>
+</empleado>
+<book category="CHILDREN">
+  <title lang="en">Harry Potter</title>
+  <author>J K. Rowling</author>
+  <year>2005</year>
+  <price>29.99</price>
+</book>
+</empleados>

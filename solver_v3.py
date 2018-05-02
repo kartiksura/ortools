@@ -160,16 +160,16 @@ class SchedulingSolver:
         self.allowedtasks = list(range(self.num_tasks))
 
         #Load all the workers
-        self.allWorkers =[{'Name': '---', 'ATasks': [0, 1, 2, 3], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Op1', 'ATasks': [0], 'AShifts': [0, 1]},
-                          {'Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1]},
-                          {'Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Op4', 'ATasks': [0, 2], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Op5', 'ATasks': [0], 'AShifts': [0, 1]},
-                          {'Name': 'Re1', 'ATasks': [0, 2], 'AShifts': [0, 2]},
-                          {'Name': 'Su1', 'ATasks': [1], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Su2', 'ATasks': [1], 'AShifts': [0, 1, 2]},
-                          {'Name': 'Su3', 'ATasks': [1, 2], 'AShifts': [0, 2]}]
+        self.allWorkers =[{'ID':'001','Name': '---', 'ATasks': [0, 1, 2], 'AShifts': [0, 1, 2]},
+                          {'ID':'002','Name': 'Op1', 'ATasks': [0], 'AShifts': [0, 1]},
+                          {'ID':'003','Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1]},
+                          {'ID':'004','Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2]},
+                          {'ID':'005','Name': 'Op4', 'ATasks': [0, 2], 'AShifts': [0, 1, 2]},
+                          {'ID':'006','Name': 'Op5', 'ATasks': [0], 'AShifts': [0, 1]},
+                          {'ID':'007','Name': 'Re1', 'ATasks': [0, 2], 'AShifts': [0, 2]},
+                          {'ID':'008','Name': 'Su1', 'ATasks': [1], 'AShifts': [0, 1, 2]},
+                          {'ID':'009','Name': 'Su2', 'ATasks': [1], 'AShifts': [0, 1, 2]},
+                          {'ID':'010','Name': 'Su3', 'ATasks': [1, 2], 'AShifts': [0, 2]}]
 
         #Set the workers for the problem
         self.nameWorkers = self.allWorkers
@@ -322,6 +322,7 @@ class SchedulingSolver:
 
         #self.addHard_MaxConsecutiveWorkingDays(5)
 
+        #self.addHard_MinNonWorkingDays(2, 7)
 
     def addHardAllDifferentWorkers_OnDay(self):
         """
@@ -349,6 +350,7 @@ class SchedulingSolver:
                 _nworkers = self.dayRequirements[iday][t][s]
                 _total += _nworkers
                 self.addHardMinRequired_Task_onDay(_nworkers, t, s, iday )
+        # Opcional Total Workers debe coincidir siempre si estan asignados como debe ser
         self.addHardTotalWorkers_OnDay(_total, iday)
 
 
@@ -383,7 +385,7 @@ class SchedulingSolver:
         :return: void
         """
 
-        #print ("debug.Assigning %i workers to day %i at task %s and shift %s" %(nworkers, iday, self.nameTasks[rtask], self.nameShifts[rshift]))
+        print ("debug.Assigning %i workers to day %i at task %s and shift %s" %(nworkers, iday, self.nameTasks[rtask], self.nameShifts[rshift]))
 
         # set the number os tasks to do on this day
         self.solver.Add(self.num_workers_task_day[(rtask, rshift, iday)] == nworkers)
@@ -446,6 +448,39 @@ class SchedulingSolver:
                     self.solver.Add(self.solver.Sum(r) <= maxwdays)
 
 
+    def addHard_MinNonWorkingDays(self, minnwdays, lapse_days):
+        """
+        Set the min non-working days for the scheduler on a Hard constraint (only search for feasible solutions)
+
+        :param minnwdays: min non-working days that have to be assigned consecutively
+        :param lapse_days: number of days for the time lapse to compute
+        :return:
+        """
+
+
+        if lapse_days < 2:
+            print ("Day time lapse too short!, can't add Hard constraint")
+
+        lapse_days= lapse_days -1
+
+        if lapse_days > self.num_days:
+            lapse_days = self.num_days
+
+        for w in range(1, 1):
+            print("debug.Hard: Assigning %i min non working days for worker %i for every %i days scheduled" %(minnwdays, w, lapse_days+1))
+            dini=0
+            regla = [self.isworkingday[(w, dini + d)] == 0 for d in range(lapse_days + 1)]
+            self.solver.Add(self.solver.Sum(regla) < minnwdays)
+
+            """
+            for dini in range(self.num_days - lapse_days + 1):
+                if (dini + lapse_days) < self.num_days:
+                    print("debug.Hard-> From day %i, to day %i" %(dini, (dini + lapse_days)))
+                    temp = [self.isworkingday[(w, dini + d)] == 0 for d in range(lapse_days + 1)]
+                    self.solver.Add(self.solver.Sum(temp) < minnwdays)
+            """
+
+
     def softConstraints(self):
         """
         Define Soft Constraints for the problem, it points the cost penalization for
@@ -474,7 +509,7 @@ class SchedulingSolver:
 
         #------
         # Add max consecutive working days constraint
-        self.addSoft_MaxConsecutiveWorkingDays(5, 200)
+        #self.addSoft_MaxConsecutiveWorkingDays(5, 200)
 
         # Add min non-working days inside a time lapse
         self.addSoft_MinNonWorkingDays(2, 7, 95)
@@ -919,6 +954,7 @@ def main():
 
     cost =0
 
+    #TODO: Falta procedimiento de Carga de empleados y planificaciones externas
 
     mysched = SchedulingSolver()
     choose_types = ChooseTypeDb

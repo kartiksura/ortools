@@ -78,13 +78,48 @@ class ExcelLoad():
 
         return Empleado
 
+class Orientador():
+
+    def __init__(self, Empleados):
+
+        self.Empleados = Empleados
+        self.planPesos  = []
+        self.plaPesosDia = {}
+
+    def cargaEmpleados(self, Empleados):
+
+        self.Empleados = Empleados
+
+
+    def calculaPesosDia(selfs):
+
+        '''
+        Para cada dia calcula el peso de cada dia segun las caracteristicas de cada empleado y dia
+        :return:
+        '''
+
+
+    def filtrarEmpPorPuesto(self, Puesto):
+        '''
+        Filtra el diccionario de empleados segun el puesto en concreto
+        :return: Una lista de empleados que coinciden con el puesto solicitado
+        '''
+
+        res = []
+
+        for empleado in self.Empleados:
+            if Puesto in empleado['PuestosPermitidos']:
+                res.append(empleado)
+
+        return res
+
 def main():
     
     lx = ExcelLoad('Empleados.xlsx')
     res = lx.LoadEmployees()
-    
-
-    print (res)
+    orientador = Orientador(res)
+    puestos = orientador.filtrarEmpPorPuesto('Operario')
+    print (puestos)
 
 
 if __name__ == "__main__":

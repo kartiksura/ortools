@@ -1,5 +1,7 @@
 from openpyxl import load_workbook
 from enum import Enum
+from operator import itemgetter
+
 
 class Pesos(Enum):
     P_No_Disponible = 0  # No planificable
@@ -37,12 +39,24 @@ class ExcelLoad():
     def LoadEmployees(self):
 
         Empleado = {}
-        
-        for fila in range(2, self.maxRows()):
+
+        for fila in range(2, self.maxRows()+1):
             Empleado = self._LoadEmployee(fila)
             self.Empleados.append(Empleado)
 
         return self.Empleados
+
+
+    def _AdaptarLista(self, lista):
+
+        res = []
+        _lista = lista.split(',')
+
+        for elem in _lista:
+            s = elem.strip()
+            res.append(s)
+
+        return res
 
 
     def _LoadEmployee(self, fila):
@@ -60,14 +74,14 @@ class ExcelLoad():
         Empleado['VacDisfrutadas'] = self.hoja.cell(row=fila, column=6).value
         Empleado['VacContrato'] = self.hoja.cell(row=fila, column=7).value
         Empleado['FestAnterior'] = self.hoja.cell(row=fila, column=8).value
-        matriz = self.hoja.cell(row=fila, column=9).value
-        Empleado['HorPermitidos'] = matriz.split(',')
-        matriz = self.hoja.cell(row=fila, column=10).value
-        Empleado['HorPreferidos'] = matriz.split(',')
-        matriz = self.hoja.cell(row=fila, column=11).value
-        Empleado['PuestosPermitidos'] = matriz.split(',')
-        matriz = str(self.hoja.cell(row=fila, column=12).value)
-        Empleado['PuestosAfinidad'] = matriz.split(',')
+        matriz = self._AdaptarLista(self.hoja.cell(row=fila, column=9).value)
+        Empleado['HorPermitidos'] = matriz
+        matriz = self._AdaptarLista(self.hoja.cell(row=fila, column=10).value)
+        Empleado['HorPreferidos'] = matriz
+        matriz = self._AdaptarLista(self.hoja.cell(row=fila, column=11).value)
+        Empleado['PuestosPermitidos'] = matriz
+        matriz = self._AdaptarLista(self.hoja.cell(row=fila, column=12).value)
+        Empleado['PuestosAfinidad'] = matriz
         Empleado['FechaFinContrato'] = self.hoja.cell(row=fila, column=13).value
 
         # Cargamos la jornada semanal
@@ -109,17 +123,56 @@ class Orientador():
 
         for empleado in self.Empleados:
             if Puesto in empleado['PuestosPermitidos']:
+                idx = empleado['PuestosPermitidos'].index(Puesto)
+                empleado['PuestosAfinidad'] = empleado['PuestosAfinidad'][idx]
                 res.append(empleado)
 
-        return res
+        # Ordenamos por prioridad y luego por afinidad
+        ordenado_afi = sorted(res, key=itemgetter('PuestosAfinidad'), reverse=True)
+        ordenado_pri = sorted(ordenado_afi, key=itemgetter('Prioridad'))
+
+        return ordenado_pri
+
+    def filtrarEmpPorHorario(self, Horario):
+        '''
+        Filtra el diccionario de empleados segun el horario en concreto
+        :return: Una lista de empleados que coinciden con el horario solicitado
+        '''
+
+        res = []
+        pref = []
+
+        for empleado in self.Empleados:
+            if Horario in empleado['HorPermitidos']:
+                print(empleado['Nombre'])
+                res.append(empleado)
+
+        temp = res
+        for empleado in res:
+            print(empleado['Nombre'] + ' ' + str(empleado['HorPreferidos']))
+            if Horario in empleado['HorPreferidos']:
+                print (empleado['Nombre'] + ' ' + str(empleado['HorPreferidos']))
+                pref.append(empleado)
+                temp.remove(empleado)
+
+        pref.append(temp)
+
+        return pref
 
 def main():
     
     lx = ExcelLoad('Empleados.xlsx')
     res = lx.LoadEmployees()
+
+    for idx,emp in enumerate(res, start=1):
+        print ('RES,#' + str(idx)+ ' ' + str(emp)  )
+
     orientador = Orientador(res)
-    puestos = orientador.filtrarEmpPorPuesto('Operario')
-    print (puestos)
+    # puestos = orientador.filtrarEmpPorPuesto('Operario')
+    horarios = orientador.filtrarEmpPorHorario('MA')
+
+    for idx,emp in enumerate(horarios, start=1):
+        print ('#' + str(idx)+ ' ' + str(emp)  )
 
 
 if __name__ == "__main__":

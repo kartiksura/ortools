@@ -1,11 +1,12 @@
 from openpyxl import load_workbook
 from enum import Enum
 from operator import itemgetter
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
+from modulos.classError import GenericError
 import json
 
 
-class PesosStd(Enum):
+class PesosStd:
     P_No_Disponible = 0  # No planificable
     P_Disponible = 1    # Coste mínimo
     P_Horario = 9  # Penalización por Horario no preferente
@@ -15,58 +16,19 @@ class PesosStd(Enum):
     P_Maximo = 999 # Penalización máxima
 
 
-class CalendarioPesos:
+class Disponibilidad(Enum):
+    P_No_Disponible = 0  # No planificable
+    P_Disponible = 1
+    P_No_Preferente = -1
 
 
-    '''
-    Construye un calendario con los pesos segun las disponibilidades de cada empleado a partir
-    de las fechas de inicio y final especificadas, el resultado es una lista de empleados con
-    los correspondientes pesos para cada dia.
-    '''
+'''
+LIMITACIONES ENCONTRADAS:
 
-    def __init__(self, Empleados, FechaInicial, FechaFinal):
-
-
-        self.calendario = {}
-        self.empleados = Empleados
-        self.fechaInicial = FechaInicial
-        self.fechaFinal  = FechaFinal
-        self.diferencia = FechaFinal - FechaInicial
-
-        if self.diferencia.days < 0:
-            raise ValueError('Las fechas introducidas no son válidas')
-
-
-    def setJornada(self, diaSemana):
-
-
-        return diaSemana
-
-
-    def cargaEmpleados(self, Empleados):
-
-
-        self.empleados = Empleados
-
-
-    def asignarPesos(self):
-        '''
-        Asigna pesos a los empleados cada dia del calendario, segun la tabla de pesos especificada
-        :return:
-        '''
-
-        # creamos la matriz de valores por defecto
-
-        for empleado in self.empleados:
-            for d in range(self.diferencia.days+1):
-                dia = self.fechaInicial + timedelta(days=d)
-                dia = dia.__format__('%Y%m%d')
-                self.calendario['Id'] = empleado['Id']
-                self.calendario['Nombre'] = empleado['Nombre']
-                self.calendario[str(dia)] = self.setJornada( empleado['JornadaSemanal'][1])
-
-        return self.calendario
-
+    - No se pueden asignar horarios preferidos o permitidos por dias de la semana, por ejemplo: el miercoles sólo
+        puede realizar horario de MA, pero los demas dias no puede...
+        
+'''
 
 
 class JsonDo:
@@ -137,7 +99,6 @@ class ExcelLoad:
    
     def LoadEmployees(self):
 
-        Empleado = {}
 
         for fila in range(2, self.maxRows()+1):
             Empleado = self._LoadEmployee(fila)
@@ -204,8 +165,13 @@ class Orientador:
 
 
         self.Empleados = Empleados
-        self.planPesos  = []
-        self.plaPesosDia = {}
+        self.DispJ = Disponibilidad
+        self.Pesos = None
+        self.calendario = []
+        self.fechaInicial = None
+        self.fechaFinal  = None
+        self.diferencia = None
+
 
     def cargaEmpleados(self, Empleados):
 
@@ -213,13 +179,69 @@ class Orientador:
         self.Empleados = Empleados
 
 
-    def calculaPesosDia(selfs):
+    def _setJornada(self, diaSemana, tablaDisponibilidad):
+
+        # TablaDisponibilidades:
+        # P_No_Disponible = 0  # No planificable
+        # P_Disponible = 1
+        # P_No_Preferente = -1
+
+        pesoJ = tablaDisponibilidad[diaSemana]
+        # print ('Dia semana %i, peso = %i' %(diaSemana, pesoJ))
+
+        if pesoJ == self.DispJ.P_No_Preferente.value:
+            pesoJ = self.Pesos.P_Jornada
+
+        return pesoJ
 
 
+    def calculaPesos(self, FechaInicial, FechaFinal, TablaDePesos):
         '''
-        Para cada dia calcula el peso de cada dia segun las caracteristicas de cada empleado y dia
+        Asigna pesos a los empleados cada dia del calendario, segun la tabla de pesos especificada
+        Importante: La matriz de entrada de empleados, ya debe estar filtrada por un solo puesto y
+        los horarios permitidos.
         :return:
         '''
+
+
+        self.fechaInicial = FechaInicial
+        self.fechaFinal = FechaFinal
+        self.Pesos = TablaDePesos
+        self.diferencia = FechaFinal - FechaInicial
+        if self.diferencia.days < 0:
+            raise GenericError('Las fechas introducidas no son válidas', 'No se puede continuar')
+
+        # calculamos los pesos segun la disponibilidad semanal
+
+        for empleado in self.Empleados:
+            plan = {}
+            for d in range(self.diferencia.days+1):
+                dia = self.fechaInicial + timedelta(days=d)
+                diaf = dia.__format__('%Y-%m-%d')
+                plan['Id'] = empleado['Id']
+                plan['Nombre'] = empleado['Nombre']
+
+                # Pesos definidos segun jornada laboral
+                plan[str(diaf)] = self._setJornada( dia.weekday(), empleado['JornadaSemanal'])
+
+                # Si el dia de trabajo esta permitido, entonces, calcula pesos..
+                if int(plan[str(diaf)]) != 0:
+
+                    # Asignar pesos de los horarios
+                    horario = empleado['HorPermitidos']
+                    if not horario in empleado['HorPreferidos']:
+                        plan[str(diaf)] =  int(plan[str(diaf)]) + int(self.Pesos.P_Horario)
+
+                    # Asignar pesos segun puestos
+                    afinidad = int(empleado['PuestosAfinidad'])
+                    if afinidad != 100:
+                        calculo = round(afinidad * int(self.Pesos.P_Puesto) / 100,0)
+                        plan[str(diaf)] = int(plan[str(diaf)]) + int(calculo)
+
+
+            self.calendario.append(plan)
+
+        return self.calendario
 
 
     def filtrarEmpPorPuesto(self, Puesto, Empleados = None):
@@ -265,6 +287,7 @@ class Orientador:
 
         for empleado in ListaEmpleados:
             if Horario in empleado['HorPermitidos']:
+                empleado['HorPermitidos'] = Horario
                 res.append(empleado)
 
         temp = res.copy()
@@ -299,17 +322,17 @@ def test1():
     # 2.- Preferencia de horario
 
     orientador = Orientador(res)
-    horarios = orientador.filtrarEmpPorHorario('NO')
-    puestos = orientador.filtrarEmpPorPuesto('Operario', horarios)
+    resFiltro = orientador.filtrarEmpPorHorario('MA')
+    resFiltro = orientador.filtrarEmpPorPuesto('Operario', resFiltro)
 
-    for idx, emp in enumerate(puestos, start=1):
+    for idx, emp in enumerate(resFiltro, start=1):
         print('#' + str(idx) + ' ' + str(emp))
 
-    # js.JsonSaveToArchive(puestos, jsonfile)
-    loaded = js.JsonLoadFromArchive(jsonfile)
+    js.JsonSaveToArchive(resFiltro, jsonfile)
+    #loaded = js.JsonLoadFromArchive(jsonfile)
 
-    for idx, emp in enumerate(loaded, start=1):
-        print('R' + str(idx) + ' ' + str(emp))
+    #for idx, emp in enumerate(loaded, start=1):
+    #    print('R' + str(idx) + ' ' + str(emp))
 
 
 def test2():
@@ -329,10 +352,10 @@ def test2():
     fini = datetime(2018, 1, 1)
     ffin = datetime(2018, 1, 7)
 
-    CalPesos = CalendarioPesos(loaded, fini, ffin)
+    orientador = Orientador(loaded)
 
 
-    res = CalPesos.asignarPesos()
+    res = orientador.calculaPesos(fini, ffin, PesosStd)
 
     print (str(res))
 

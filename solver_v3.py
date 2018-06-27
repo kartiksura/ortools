@@ -1051,7 +1051,7 @@ def main():
 
 class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
 
-    def do_POST(s):
+    def do_POST(self):
 
         # print("\n----- Request Start ----->\n")
         # request_path = s.path
@@ -1070,32 +1070,13 @@ class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
         """Respond to a POST request."""
 
         # Extract and print the contents of the POST
-        length = int(s.headers['Content-Length'])
-        post_data = urlparse.parse_qs(s.rfile.read(length).decode('utf-8'))
-        data = json.loads(post_data['json'][0])
-        # data = {
-        #     "nameShifts" : ["MOR", "NON", "NOC"],
-        #     "nameTasks": ['Operario','Supervisor', 'Revisor'],
-        #     "allWorkers": [{'ID':'001','Name': '---', 'ATasks': [0, 1, 2], 'AShifts': [0, 1, 2]},
-        #                         {'ID':'002','Name': 'Op1', 'ATasks': [0], 'AShifts': [0, 1]},
-        #                         {'ID':'003','Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1]},
-        #                         {'ID':'004','Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2]},
-        #                         {'ID':'005','Name': 'Op4', 'ATasks': [0, 2], 'AShifts': [0, 1, 2]},
-        #                         {'ID':'006','Name': 'Op5', 'ATasks': [0], 'AShifts': [0, 1]},
-        #                         {'ID':'007','Name': 'Re1', 'ATasks': [0, 2], 'AShifts': [0, 2]},
-        #                         {'ID':'008','Name': 'Su1', 'ATasks': [1], 'AShifts': [0, 1, 2]},
-        #                         {'ID':'009','Name': 'Su2', 'ATasks': [1], 'AShifts': [0, 1, 2]},
-        #                         {'ID':'010','Name': 'Su3', 'ATasks': [1, 2], 'AShifts': [0, 2]}],
-        #     "allRequirements": [([2, 1, 0], [1, 1, 0], [0, 0, 0]),
-        #                                 ([1, 1, 0], [1, 1, 0], [0, 0, 0]),
-        #                                 ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
-        #                                 ([2, 1, 0], [1, 1, 0], [0, 0, 1]),
-        #                                 ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
-        #                                 ([3, 1, 1], [1, 1, 0], [0, 0, 1]),
-        #                                 ([2, 1, 1], [1, 1, 0], [0, 1, 1])]
-        # }
+        # length = int(s.headers['Content-Length'])
+        # post_data = urlparse.parse_qs(s.rfile.read(length).decode('utf-8'))
+        # data = json.loads(post_data['json'][0])
+        # data = json.loads(request.body)
 
-
+        data_string = self.rfile.read(int(self.headers['Content-Length']))
+        data = json.loads(data_string)
 
         #TODO: Falta procedimiento de Carga de empleados y planificaciones externas
 
@@ -1111,9 +1092,10 @@ class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
 
         print(cost)
         dump = json.dumps(cost)
-        s.send_header('Content-Type', 'application/json')
-        s.end_headers()
-        s.send_response(200, dump)
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(dump)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,10 @@
 from __future__ import print_function
 from ortools.constraint_solver import pywrapcp
 from enum import Enum
+import BaseHTTPServer
+import json
+import urlparse
+
 
 class ChooseTypeDb(Enum):
     CHOOSE_RANDOM = 2
@@ -160,7 +164,7 @@ class SchedulingSolver:
         self.allowedtasks = list(range(self.num_tasks))
 
         #Load all the workers
-        self.allWorkers =[{'ID':'001','Name': '---', 'ATasks': [0, 1, 2], 'AShifts': [0, 1, 2]},
+        self.allWorkers =[{'ID':'001','Name': '***', 'ATasks': [0, 1, 2], 'AShifts': [0, 1, 2]},
                           {'ID':'002','Name': 'Op1', 'ATasks': [0], 'AShifts': [0, 1]},
                           {'ID':'003','Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1]},
                           {'ID':'004','Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2]},
@@ -198,6 +202,44 @@ class SchedulingSolver:
         self.dayRequirements = self.allRequirements[0:7]
         self.num_days = len(self.dayRequirements)
 
+    def loadJSONData(self, data):
+        """
+        Load the data to the solver
+
+        :return:
+        """
+        #Load the shifts
+        # self.nameShifts = ['MAN', 'TAR', 'NOC']
+        self.nameShifts = data['nameShifts']
+        self.num_shifts = len(self.nameShifts)
+        self.allowedshifts = list(range(self.num_shifts))
+
+        #Load the tasks
+        self.nameTasks = data['nameTasks']
+        self.num_tasks = len(self.nameTasks)
+        self.allowedtasks = list(range(self.num_tasks))
+
+        #Load all the workers
+        self.allWorkers =data['allWorkers']
+        #Set the workers for the problem
+        self.nameWorkers = self.allWorkers
+        self.num_workers = len(self.nameWorkers)
+
+        #Set the requirements for the tasks
+        #   For a specify day and shift,
+        #--------------------------------------------------
+        #   {'Operario': [2, 1, 0], 'Supervisor': [1, 1, 0], 'Revisor': [0, 0, 0]} = {[2, 1, 0],[1, 1, 0], [0, 0, 0]}
+        #   Day0 = 'Operario': [2, 1, 0]  -> Sets 2 workers for task 'Operario' on shift 1, 1 worker on shift 2 and none on the 3rd shift
+        #
+        #   ([2OM,1OT,0ON],[1SM,1ST,0SN],[0RM,0RT,0RN]) = DAY 0-5
+        #     .
+        #     .
+        #   ([2OM,2OT,1ON],[1SM,1ST,0SN],[0RM,ORT,1RN]) = DAY 6-7
+        #
+
+        self.allRequirements = data['allRequirements']
+        self.dayRequirements = self.allRequirements
+        self.num_days = len(self.dayRequirements)
 
     def definedModel(self):
         """
@@ -412,7 +454,7 @@ class SchedulingSolver:
                 self.solver.Add(exp)
         """
         # create a list with not allowed tasks
-        _notallowed = self.allowedtasks.copy()
+        _notallowed = list(self.allowedtasks)
         for n in atasks:
             _notallowed.remove(n)
 
@@ -565,7 +607,7 @@ class SchedulingSolver:
         num_ashifts = len(ashift)
 
         # create a list with not allowed tasks
-        _notallowed = self.allowedshifts.copy()
+        _notallowed = list(self.allowedshifts)
         for n in ashift:
             _notallowed.remove(n)
 
@@ -759,15 +801,15 @@ class SchedulingSolver:
         print("Solutions found:", found)
         print("Time:", self.solver.WallTime(), "ms")
         print()
-
+        
         if found > 0:
             best_solution = collector.SolutionCount() - 1
-            self.showSolutionWorkersToScreen(dsol, collector.ObjectiveValue(best_solution), collector)
+            jsonResult = self.showSolutionWorkersToScreen(dsol, collector.ObjectiveValue(best_solution), collector)
             self.showSolutionToScreen(dsol, collector.ObjectiveValue(best_solution), collector)
         else:
             print ("No solutions found on time limit ", (self.C_TIMELIMIT / 1000), " sec, try to revise hard constraints.")
 
-        return cost
+        return jsonResult
 
 
     def showSolutionToScreen(self, dsoln, dcost,collector=None):
@@ -892,16 +934,19 @@ class SchedulingSolver:
         linea = "________________"
         barra = ""
         print("Solution number ", str(dsoln), "Cost=", str(dcost), '\n')
-
+        shifts = []
         for i in range(self.num_days):
             day_str = day_str + "Day" + str(i) + "    |     "
             for s in range(self.num_shifts):
                 shf_str = shf_str + self.nameShifts[s][:3] + " "
+                if i == 0:
+                 shifts.append(self.nameShifts[s])
             shf_str = shf_str + "| "
             barra += linea
         print("             ", day_str)
         print("          ", shf_str)
         print(barra)
+        tasks, workersList = [], []
 
         for j in range(self.num_tasks):
             mt = 0
@@ -917,12 +962,27 @@ class SchedulingSolver:
             # then now we know the max number of task to create (mt)
             for m in range(1, mt+1):
                 shift_str = self.nameTasks[j][:7] + "[" + str(m) + "] "
+                tasks.append(shift_str)
+                workers = []
                 for d in range(self.num_days):
+                    worker = []
                     for s in range(self.num_shifts):
                         strw= self._findWorker(m,d,s,j, dsoln,collector)
+                        worker.append(strw)
                         shift_str += strw+ self.space(1)
                     shift_str += "|" + self.space(1)
+                    workers.append(worker)
+                workersList.append(workers)
                 print(shift_str)
+        data = {
+             "Tasks" : tasks,
+             "Workers": workersList,
+             "Shifts": shifts,
+             "NoOfDays": self.num_days
+        }
+        print(data)
+        return data
+
 
 
     def _findWorker(self, num, d, s, t, dsoln, collector=None):
@@ -958,8 +1018,28 @@ def main():
 
     mysched = SchedulingSolver()
     choose_types = ChooseTypeDb
-
-    mysched.loadData()
+    data = {
+        "nameShifts" : ["MAN", "TAR", "NOC"],
+        "nameTasks": ['Operario','Supervisor', 'Revisor'],
+        "allWorkers": [{'ID':'001','Name': '---', 'ATasks': [0, 1, 2], 'AShifts': [0, 1, 2]},
+                            {'ID':'002','Name': 'Op1', 'ATasks': [0], 'AShifts': [0, 1]},
+                            {'ID':'003','Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1]},
+                            {'ID':'004','Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2]},
+                            {'ID':'005','Name': 'Op4', 'ATasks': [0, 2], 'AShifts': [0, 1, 2]},
+                            {'ID':'006','Name': 'Op5', 'ATasks': [0], 'AShifts': [0, 1]},
+                            {'ID':'007','Name': 'Re1', 'ATasks': [0, 2], 'AShifts': [0, 2]},
+                            {'ID':'008','Name': 'Su1', 'ATasks': [1], 'AShifts': [0, 1, 2]},
+                            {'ID':'009','Name': 'Su2', 'ATasks': [1], 'AShifts': [0, 1, 2]},
+                            {'ID':'010','Name': 'Su3', 'ATasks': [1, 2], 'AShifts': [0, 2]}],
+        "allRequirements": [([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+                                    ([1, 1, 0], [1, 1, 0], [0, 0, 0]),
+                                    ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+                                    ([2, 1, 0], [1, 1, 0], [0, 0, 1]),
+                                    ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+                                    ([3, 1, 1], [1, 1, 0], [0, 0, 1]),
+                                    ([2, 1, 1], [1, 1, 0], [0, 1, 1])]
+    }
+    mysched.loadJSONData(data)
     mysched.definedModel()
     mysched.hardConstraints()
     # mysched.softConstraints()
@@ -969,5 +1049,73 @@ def main():
 
     exit(0)
 
+class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
+
+    def do_POST(s):
+
+        # print("\n----- Request Start ----->\n")
+        # request_path = s.path
+
+        # print(request_path)
+        
+        # request_headers = s.headers
+        # content_length = request_headers.getheaders('content-length')
+        # length = int(content_length[0]) if content_length else 0
+        
+        # print(request_headers)
+        # print(s.rfile.read(length))
+        # print("<----- Request End -----\n")
+
+
+        """Respond to a POST request."""
+
+        # Extract and print the contents of the POST
+        length = int(s.headers['Content-Length'])
+        post_data = urlparse.parse_qs(s.rfile.read(length).decode('utf-8'))
+        data = json.loads(post_data['json'][0])
+        # data = {
+        #     "nameShifts" : ["MOR", "NON", "NOC"],
+        #     "nameTasks": ['Operario','Supervisor', 'Revisor'],
+        #     "allWorkers": [{'ID':'001','Name': '---', 'ATasks': [0, 1, 2], 'AShifts': [0, 1, 2]},
+        #                         {'ID':'002','Name': 'Op1', 'ATasks': [0], 'AShifts': [0, 1]},
+        #                         {'ID':'003','Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1]},
+        #                         {'ID':'004','Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2]},
+        #                         {'ID':'005','Name': 'Op4', 'ATasks': [0, 2], 'AShifts': [0, 1, 2]},
+        #                         {'ID':'006','Name': 'Op5', 'ATasks': [0], 'AShifts': [0, 1]},
+        #                         {'ID':'007','Name': 'Re1', 'ATasks': [0, 2], 'AShifts': [0, 2]},
+        #                         {'ID':'008','Name': 'Su1', 'ATasks': [1], 'AShifts': [0, 1, 2]},
+        #                         {'ID':'009','Name': 'Su2', 'ATasks': [1], 'AShifts': [0, 1, 2]},
+        #                         {'ID':'010','Name': 'Su3', 'ATasks': [1, 2], 'AShifts': [0, 2]}],
+        #     "allRequirements": [([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+        #                                 ([1, 1, 0], [1, 1, 0], [0, 0, 0]),
+        #                                 ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+        #                                 ([2, 1, 0], [1, 1, 0], [0, 0, 1]),
+        #                                 ([2, 1, 0], [1, 1, 0], [0, 0, 0]),
+        #                                 ([3, 1, 1], [1, 1, 0], [0, 0, 1]),
+        #                                 ([2, 1, 1], [1, 1, 0], [0, 1, 1])]
+        # }
+
+
+
+        #TODO: Falta procedimiento de Carga de empleados y planificaciones externas
+
+        mysched = SchedulingSolver()
+        choose_types = ChooseTypeDb
+        mysched.loadJSONData(data)
+        mysched.definedModel()
+        mysched.hardConstraints()
+        # mysched.softConstraints()
+        mysched.calculateCost()
+        mysched.createDecisionBuilderPhase(choose_types.CHOOSE_MIN_SIZE_LOWEST_MIN.value)
+        cost=mysched.searchSolutionsCollector(0)
+
+        print(cost)
+        dump = json.dumps(cost)
+        s.send_header('Content-Type', 'application/json')
+        s.end_headers()
+        s.send_response(200, dump)
+
+
 if __name__ == "__main__":
-    main()
+    #main()
+    BaseHTTPServer.HTTPServer(('localhost', 8000), MyServer).serve_forever()

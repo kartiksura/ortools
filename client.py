@@ -28,7 +28,8 @@ data = {
                                 ([2, 1, 1], [1, 1, 0], [0, 1, 1])],
     "avoidOvertime": True,
     "maxConsecutiveWorkingDays": 7,
-    "leaveRequests": [[2, 0, 0], [1, 1, 1]]
+    #Leave requests have the format: [workerId, Day, Shift]
+    "leaveRequests": [[2, 0, 0], [1, 1, 1]]  
     # "leaveRequests": []
 }
 

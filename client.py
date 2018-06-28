@@ -9,7 +9,7 @@ data = {
     "nameTasks": ['Cook','Bartender', 'Driver'],
     "allWorkers": [
                         {'ID':'001','Name': '---', 'ATasks': [0, 1, 2], 'AShifts': [0, 1, 2]},
-                        {'ID':'002','Name': 'OpP', 'ATasks': [0], 'AShifts': [0, 1]},
+                        {'ID':'002','Name': 'KARTIK', 'ATasks': [0], 'AShifts': [0, 1]},
                         {'ID':'003','Name': 'Op2', 'ATasks': [0], 'AShifts': [0, 1]},
                         {'ID':'004','Name': 'Op3', 'ATasks': [0], 'AShifts': [0, 1, 2]},
                         {'ID':'005','Name': 'Op4', 'ATasks': [0, 2], 'AShifts': [0, 1, 2]},

@@ -1020,7 +1020,7 @@ class SchedulingSolver:
                     for s in range(self.num_shifts):
                         strw= self._findWorker(m,d,s,j, dsoln,collector)
                         worker.append(strw)
-                        shift_str += strw+ self.space(1)
+                        shift_str += strw[:3]+ self.space(1)
                     shift_str += "|" + self.space(1)
                     workers.append(worker)
                 workersList.append(workers)
@@ -1032,7 +1032,6 @@ class SchedulingSolver:
              "NoOfDays": self.num_days,
              "Error":0
         }
-        print(data)
         return data
 
 
@@ -1142,7 +1141,7 @@ class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
         mysched.createDecisionBuilderPhase(choose_types.CHOOSE_MIN_SIZE_LOWEST_MIN.value)
         cost=mysched.searchSolutionsCollector(0)
 
-        print(cost)
+        # print(cost)
         dump = json.dumps(cost)
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')

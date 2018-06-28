@@ -29,6 +29,7 @@ data = {
     "avoidOvertime": True,
     "maxConsecutiveWorkingDays": 7,
     "leaveRequests": [[2, 0, 0], [1, 1, 1]]
+    # "leaveRequests": []
 }
 
 jsonData = json.dumps(data)

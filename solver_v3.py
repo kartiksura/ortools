@@ -857,7 +857,9 @@ class SchedulingSolver:
             self.showSolutionToScreen(dsol, collector.ObjectiveValue(best_solution), collector)
         else:
             print ("No solutions found on time limit ", (self.C_TIMELIMIT / 1000), " sec, try to revise hard constraints.")
-
+            jsonResult = {
+                          "Error" :1
+                        }
         return jsonResult
 
 
@@ -1027,7 +1029,8 @@ class SchedulingSolver:
              "Tasks" : tasks,
              "Workers": workersList,
              "Shifts": shifts,
-             "NoOfDays": self.num_days
+             "NoOfDays": self.num_days,
+             "Error":0
         }
         print(data)
         return data

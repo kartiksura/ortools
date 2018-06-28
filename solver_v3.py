@@ -225,6 +225,10 @@ class SchedulingSolver:
         self.nameWorkers = self.allWorkers
         self.num_workers = len(self.nameWorkers)
 
+        self.avoidOvertime = data['avoidOvertime']
+        self.maxConsecutiveWorkingDays = data['maxConsecutiveWorkingDays']
+        self.leaveRequests = data['leaveRequests']
+
         #Set the requirements for the tasks
         #   For a specify day and shift,
         #--------------------------------------------------
@@ -342,8 +346,14 @@ class SchedulingSolver:
         """
         # HARD CONSTRAINTS
         print ("Implementing hard constraints...")
-        # All workers for a day must be different for to do the task+shift
-        self.addHardAllDifferentWorkers_OnDay()
+        # All workers for a day must be different for to do the task+shift, to avoid paying overtime, 
+        #else a worker should be able to work in multiple shifts, but not at the same time
+        if self.avoidOvertime == True:
+            self.addHardAllDifferentWorkers_OnDay()
+        else:
+            self.addHardAllDifferentWorkersForTasks_OnDay()
+        
+        self.addHardLeaveRequests()
 
         # Set all the allowed tasks for all the workers as hard constraints
         for w in range(self.num_workers):
@@ -362,7 +372,7 @@ class SchedulingSolver:
         # Set the scheduling number of working days from the requirement
         # Each worker works 5 or 6 days in a week.
 
-        #self.addHard_MaxConsecutiveWorkingDays(5)
+        self.addHard_MaxConsecutiveWorkingDays(self.maxConsecutiveWorkingDays)
 
         #self.addHard_MinNonWorkingDays(2, 7)
 
@@ -377,6 +387,42 @@ class SchedulingSolver:
         for d in range(self.num_days):
             temp = [self.workers_task_day[(w, t, s, d)] for w in range(1,self.num_workers) for t in range(self.num_tasks) for s in range(self.num_shifts)]
             self.solver.Add(self.solver.AllDifferentExcept(temp,0))
+ 
+    def addHardAllDifferentWorkersForTasks_OnDay(self):
+        """
+        Constraint to ensure that a task is assigned to a different worker for a Day
+
+        :return: void
+        """
+        # All workers for a day must be different except the scape value (0) *None* to do the task on shift
+        print ("Setup HARD: All workers for a day must be different.")
+        for d in range(self.num_days):
+            for s in range(self.num_shifts):
+                temp = [self.workers_task_day[(w, t, s, d)] for w in range(1,self.num_workers) for t in range(self.num_tasks)]
+                self.solver.Add(self.solver.AllDifferentExcept(temp,0))
+ 
+    def addHardLeaveRequests(self):
+        """
+        Constraint to ensure that a task is assigned to a different worker for a Day
+
+        :return: void
+        """
+        # All workers for a day must be different except the scape value (0) *None* to do the task on shift
+        print ("Setup HARD: All leave requests should be accomodated.")
+
+        print (self.leaveRequests)
+        print ("loop")
+
+        for r in (self.leaveRequests):
+            temp = [self.workers_task_day[(r[0], t, r[2], r[1])] for t in range(self.num_tasks)]
+            print (temp)
+            self.solver.Add(self.solver.AllDifferentExcept(temp,0))
+              
+        # for d in range(self.num_days):
+        #     for s in range(self.num_shifts):
+        #         temp = [self.workers_task_day[(w, t, s, d)] for w in range(1,self.num_workers) for t in range(self.num_tasks)]
+        #         self.solver.Add(self.solver.allAllDifferentExcept(temp,0))
+
 
 
     def addHardAssignDayRequirements(self, iday):
@@ -537,9 +583,12 @@ class SchedulingSolver:
         #   shifts[(1, 0)] != 0  (worker 1 on day 0) !=0 (working, 0 mean working)
         #solver.Add(solver.IsDifferentCstVar(shifts[(1, 0)],0))
 
-
+        # for leave in self.leaveRequests:
+        #   print ("debug.Requesting Leave %i worker to day %i shift %i" %(leave[0], leave[1], leave[2]))
+        #   self.addSoft_ShiftForworkerOnDay_NotEqualTo(leave[0], leave[1], leave[2], 30)
+        # self.addSoft_ShiftForworkerOnDay_NotEqualTo(0, 0, 0, 30)
         #---Define the Soft constraints to use on the problem-----
-        #self.addSoft_ShiftForworkerOnDay_NotEqualTo(2, 2, 2, 30)
+        # self.addSoft_ShiftForworkerOnDay_NotEqualTo(2, 2, 2, 30)
         #self.addSoft_ShiftForworkerOnDay_NotEqualTo(3, 6, 0, 30)
         #self.addSoft_ShiftForworkerOnADay_EqualTo(1, 1, 0, 90)
         #self.addSoft_AfterAShiftForworkerNextShift_NotEqualTo(1, 1, 0, 80)
@@ -554,10 +603,10 @@ class SchedulingSolver:
         #self.addSoft_MaxConsecutiveWorkingDays(5, 200)
 
         # Add min non-working days inside a time lapse
-        self.addSoft_MinNonWorkingDays(2, 7, 95)
+        # self.addSoft_MinNonWorkingDays(2, 7, 95)
 
         #the last constraint is to calculate the final cost  //extern now
-        #self.calculateCost()
+        self.calculateCost()
 
 
     def calculateCost(self):
@@ -1042,7 +1091,7 @@ def main():
     mysched.loadJSONData(data)
     mysched.definedModel()
     mysched.hardConstraints()
-    # mysched.softConstraints()
+    mysched.softConstraints()
     mysched.calculateCost()
     mysched.createDecisionBuilderPhase(choose_types.CHOOSE_MIN_SIZE_LOWEST_MIN.value)
     cost=mysched.searchSolutionsCollector(0)
@@ -1085,7 +1134,7 @@ class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
         mysched.loadJSONData(data)
         mysched.definedModel()
         mysched.hardConstraints()
-        # mysched.softConstraints()
+        mysched.softConstraints()
         mysched.calculateCost()
         mysched.createDecisionBuilderPhase(choose_types.CHOOSE_MIN_SIZE_LOWEST_MIN.value)
         cost=mysched.searchSolutionsCollector(0)
